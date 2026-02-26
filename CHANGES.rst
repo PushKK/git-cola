@@ -6,8 +6,34 @@ v4.18.0
 Breaking Changes
 ----------------
 * Python 3.9 is now the minimum supported Python version.
-  Python 3.6, 3.7 and 3.8 are no longer supported. The code still works but there will
-  be no effort to keep things working when using older Python versions.
+  Python 3.6, 3.7 and 3.8 are no longer supported. The code may still work but there
+  will be no effort to keep things working when using older Python versions.
+
+Usability, bells and whistles
+-----------------------------
+* The number of commits shown in the "Load Previous Commit Message" and
+  "Fixup Previous Commit" menus is now configurable through the Preferences
+  window.  The ``cola.loadcommitmsgcount`` and ``cola.fixupcommitcount``
+  configuration variables control the number of commits displayed in each
+  menu and default to ``10``.
+  (`#1554 <https://github.com/git-cola/git-cola/pull/1554>`_)
+
+* The Git ``reftable`` ref storage extension is now supported.
+  (`#1551 <https://github.com/git-cola/git-cola/issues/1551>`_)
+
+
+Translations
+------------
+* Updated Russian translation.
+  (`#1547 <https://github.com/git-cola/git-cola/pull/1547>`_)
+
+Development
+-----------
+* Type checking using ``mypy`` has been enabled.
+  (`#1553 <https://github.com/git-cola/git-cola/pull/1553>`_)
+
+* Type hints were added to various modules.
+  (`#1555 <https://github.com/git-cola/git-cola/pull/1555>`_)
 
 
 .. _v4.17.1:

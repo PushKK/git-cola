@@ -32,6 +32,7 @@ EDITOR = 'gui.editor'
 ENABLE_GRAVATAR = 'cola.gravatar'
 ENABLE_POPUPS = 'cola.enablepopups'
 EXPANDTAB = 'cola.expandtab'
+FIXUP_COMMIT_COUNT = 'cola.fixupcommitcount'
 FONTDIFF = 'cola.fontdiff'
 FONTSIZE = 'cola.fontsize'
 HIDPI = 'cola.hidpi'
@@ -42,6 +43,7 @@ INOTIFY = 'cola.inotify'
 INOTIFY_DELAY = 'cola.inotifydelay'
 NOTIFY_ON_PUSH = 'cola.notifyonpush'
 LINEBREAK = 'cola.linebreak'
+LOAD_COMMITMSG_COUNT = 'cola.loadcommitmsgcount'
 LOGDATE = 'cola.logdate'
 MAXRECENT = 'cola.maxrecent'
 MERGE_DIFFSTAT = 'merge.diffstat'
@@ -118,7 +120,7 @@ class Verbosity:
     SIMPLE_COMMANDS = 1
 
 
-def commit_cleanup_modes():
+def commit_cleanup_modes() -> list[str]:
     """Return valid values for the git config commit.cleanup"""
     return [
         'default',
@@ -153,11 +155,13 @@ class Defaults:
     enable_gravatar = True
     enable_popups = False
     expandtab = False
+    fixup_commit_count = 10
     history_browser = 'gitk'
     http_proxy = ''
     icon_theme = 'default'
     inotify = True
     inotify_delay = 888
+    load_commitmsg_count = 10
     notifyonpush = False
     linebreak = True
     maxrecent = 8
@@ -322,7 +326,7 @@ def enable_gravatar(context):
     return context.cfg.get(ENABLE_GRAVATAR, default=Defaults.enable_gravatar)
 
 
-def default_history_browser():
+def default_history_browser() -> str:
     """Return the default history browser (e.g. git-dag, gitk)"""
     if utils.is_win32():
         # On Windows, a sensible default is "python git-cola dag"
@@ -371,6 +375,16 @@ def maxrecent(context):
     if context:
         value = context.cfg.get(MAXRECENT, default=value)
     return value
+
+
+def fixup_commit_count(context):
+    """The number of commits for the Fixup Previous Commit menu"""
+    return context.cfg.get(FIXUP_COMMIT_COUNT, default=Defaults.fixup_commit_count)
+
+
+def load_commitmsg_count(context):
+    """The number of commits for the Load Previous Commit Message menu"""
+    return context.cfg.get(LOAD_COMMITMSG_COUNT, default=Defaults.load_commitmsg_count)
 
 
 def mouse_zoom(context):
@@ -438,12 +452,12 @@ class PreferencesModel(QtCore.QObject):
 
     config_updated = Signal(str, str, object)
 
-    def __init__(self, context):
+    def __init__(self, context) -> None:
         super().__init__()
         self.context = context
         self.config = context.cfg
 
-    def set_config(self, source, config, value):
+    def set_config(self, source, config, value) -> None:
         """Set a configuration value"""
         if source == 'local':
             self.config.set_repo(config, value)
@@ -465,19 +479,19 @@ class SetConfig(Command):
 
     UNDOABLE = True
 
-    def __init__(self, model, source, config, value):
+    def __init__(self, model, source, config, value) -> None:
         self.source = source
         self.config = config
         self.value = value
         self.old_value = None
         self.model = model
 
-    def do(self):
+    def do(self) -> None:
         """Modify the model and store the updated configuration"""
         self.old_value = self.model.get_config(self.source, self.config)
         self.model.set_config(self.source, self.config, self.value)
 
-    def undo(self):
+    def undo(self) -> None:
         """Restore the configuration change to its original value"""
         if self.old_value is None:
             return
@@ -489,11 +503,11 @@ class RemoveDictionary(Command):
 
     UNDOABLE = True
 
-    def __init__(self, context, values):
+    def __init__(self, context, values) -> None:
         self.context = context
         self.values = values
 
-    def do(self):
+    def do(self) -> None:
         """Remove spelling dictionary entries"""
         for value in self.values:
             self.context.git.config(
@@ -507,7 +521,7 @@ class RemoveDictionary(Command):
             )
         self.context.cfg.reset()
 
-    def undo(self):
+    def undo(self) -> None:
         """Undo removal of spelling dictionary entries"""
         add_command = AddDictionary(self.context, self.values)
         add_command.do()
@@ -518,17 +532,17 @@ class AddDictionary(Command):
 
     UNDOABLE = True
 
-    def __init__(self, context, values):
+    def __init__(self, context, values) -> None:
         self.context = context
         self.values = values
 
-    def do(self):
+    def do(self) -> None:
         """Add spelling dictionary entries"""
         for value in self.values:
             self.context.git.config('--global', '--add', DICTIONARY, value)
         self.context.cfg.reset()
 
-    def undo(self):
+    def undo(self) -> None:
         """Remove spelling dictionary entries"""
         remove_command = RemoveDictionary(self.context, self.values)
         remove_command.do()

@@ -62,6 +62,7 @@ trees:
         - test
         - check/fmt
         - check/pyupgrade
+        - check/mypy
       check/fmt: garden fmt -- --check
       check/pyupgrade: |
         ${activate}
@@ -69,6 +70,9 @@ trees:
         then
             pyupgrade --py39-plus bin/git-* bin/*.py cola/*.py cola/*/*.py
         fi
+      check/mypy: |
+        ${activate}
+        python3 -m mypy --config-file pyproject.toml bin cola
       fmt: |
         ${activate}
         cercis --version
@@ -162,6 +166,7 @@ trees:
     remotes:
       abid1998: "${gh-https}/abid1998/git-cola.git"
       achernet: "${gh-https}/achernet/git-cola.git"
+      Ahrirg: "${gh-https}/Ahrirg/git-cola.git"
       arnaudh: "${gh-https}/arnaudh/git-cola.git"
       axel-h: "${gh-https}/axel-h/git-cola.git"
       BaumiCoder: "${gh-https}/BaumiCoder/git-cola.git"
@@ -205,6 +210,7 @@ trees:
       NielBuys: "${gh-https}/NielBuys/git-cola.git"
       Nizhal: "${gh-https}/Nizhal/git-cola.git"
       OriShalhon: "${gh-https}/OriShalhon/git-cola.git"
+      p12tic: "${gh-https}/p12tic/git-cola.git"
       pilarmolinalopez: "${gh-https}/pilarmolinalopez/git-cola.git"
       PushKK: "${gh-https}/PushKK/git-cola.git"
       quintusfelix: "${gh-https}/quintusfelix/git-cola.git"
