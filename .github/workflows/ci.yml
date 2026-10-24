@@ -7,14 +7,14 @@ jobs:
     name: Test
     runs-on: ubuntu-latest
     steps:
-      - uses: styfle/cancel-workflow-action@0.13.0
-      - uses: actions/checkout@v6
+      - uses: styfle/cancel-workflow-action@0.13.1
+      - uses: actions/checkout@v7
       - name: Get current date for caching
         id: get-date
         shell: bash
         run: |
           echo date=$(date -u +%Y-%m-%d) >> $GITHUB_OUTPUT
-      - uses: actions/cache@v5
+      - uses: actions/cache@v6
         id: cache
         with:
           path: |
@@ -56,7 +56,7 @@ jobs:
           garden pynsist -vv
           mv build/nsis/git-cola*.exe git-cola.exe
       - name: Upload git-cola.win.zip
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: git-cola.win
           path: git-cola.exe
@@ -73,14 +73,14 @@ jobs:
     name: macOS
     runs-on: macos-latest
     steps:
-      - uses: styfle/cancel-workflow-action@0.13.0
-      - uses: actions/checkout@v6
+      - uses: styfle/cancel-workflow-action@0.13.1
+      - uses: actions/checkout@v7
       - name: Get current date for caching
         id: get-date
         shell: bash
         run: |
           echo date=$(date -u +%Y-%m-%d) >> $GITHUB_OUTPUT
-      - uses: actions/cache@v5
+      - uses: actions/cache@v6
         id: cache
         with:
           path: |
@@ -93,11 +93,13 @@ jobs:
           rustup toolchain install stable --profile minimal --no-self-update
           cargo install garden-tools
       - name: Install dependencies
-        run: brew install git-cola
+        run: |
+          brew untap aws/tap || true
+          brew install git-cola
       - name: Build macOS git-cola.app bundle
-        run: garden macos/app -vv -D cola_app='${TREE_PATH}/local/git-cola.app'
+        run: garden macos/app -vv -D cola-app='${TREE_PATH}/local/git-cola.app'
       - name: Upload git-cola.app.zip
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: git-cola.app
           path: local

@@ -9,26 +9,27 @@ from qtpy.QtCore import Signal
 
 from .. import actions
 from .. import cmds
-from .. import core
 from .. import display
 from .. import gitcmds
 from .. import hotkeys
 from .. import icons
-from .. import textwrap
 from .. import qtutils
 from .. import spellcheck
+from .. import textwrap
 from .. import utils
-from ..interaction import Interaction
 from ..gitcmds import commit_message_path
 from ..i18n import N_
+from ..interaction import Interaction
 from ..models import dag
 from ..models import prefs
 from ..qtutils import get
 from . import defs
 from . import standard
 from .selectcommits import select_commits
-from .spellcheck import SpellCheckLineEdit, SpellCheckTextEdit
-from .text import event_anchor_mode, is_shift_pressed
+from .spellcheck import SpellCheckLineEdit
+from .spellcheck import SpellCheckTextEdit
+from .text import event_anchor_mode
+from .text import is_shift_pressed
 
 
 class CommitMessageEditor(QtWidgets.QFrame):
@@ -77,6 +78,9 @@ class CommitMessageEditor(QtWidgets.QFrame):
 
         self.launch_editor = actions.launch_editor_at_line(context, self)
         self.launch_difftool = actions.launch_difftool(context, self)
+        if context.ops.is_remote():
+            self.launch_editor.setEnabled(False)
+            self.launch_difftool.setEnabled(False)
 
         self.move_up = actions.move_up(self)
         self.move_down = actions.move_down(self)
@@ -107,7 +111,16 @@ class CommitMessageEditor(QtWidgets.QFrame):
         )
         self.description.menu_actions.extend(menu_actions)
 
-        commit_button_tooltip = N_('Commit staged changes\nShortcut: Ctrl+Enter')
+        # Render the shortcut from the action so it matches the platform --
+        # Qt maps Ctrl to Command on macOS -- instead of hardcoding "Ctrl+Enter".
+        commit_shortcut = self.commit_action.shortcut().toString(
+            QtGui.QKeySequence.NativeText
+        )
+        commit_button_tooltip = N_('Commit staged changes')
+        if commit_shortcut:
+            commit_button_tooltip = '{}\n{}'.format(
+                commit_button_tooltip, N_('Shortcut: %s') % commit_shortcut
+            )
         self.commit_button = qtutils.create_button(
             text=N_('Commit@@verb'), tooltip=commit_button_tooltip, icon=icons.commit()
         )
@@ -116,6 +129,7 @@ class CommitMessageEditor(QtWidgets.QFrame):
             self,
             disable=(self.commit_button, self.summary, self.description),
         )
+        self.commit_progress_bar.setFocusPolicy(Qt.NoFocus)
 
         # make the position label fixed size to avoid layout issues
         font = qtutils.default_monospace_font()
@@ -288,7 +302,7 @@ class CommitMessageEditor(QtWidgets.QFrame):
         commit_msg = ''
         commit_msg_path = commit_message_path(context)
         if commit_msg_path:
-            commit_msg = core.read(commit_msg_path)
+            commit_msg = context.ops.file_read(commit_msg_path)
         model.set_commitmsg(commit_msg)
 
         # Allow tab to jump from the summary to the description
@@ -296,9 +310,9 @@ class CommitMessageEditor(QtWidgets.QFrame):
         self.setFocusProxy(self.summary)
 
         cfg.user_config_changed.connect(self.config_changed)
-        self.context.notifier.ready.connect(self._ready, type=Qt.QueuedConnection)
+        QtCore.QTimer.singleShot(1000, self._background_init)
 
-    def _ready(self):
+    def _background_init(self):
         """Called when the app is ready for events"""
         self.context.runtask.run(self.spellcheck.init)
 
@@ -437,19 +451,16 @@ class CommitMessageEditor(QtWidgets.QFrame):
                 description_lines = lines[2:]
             description = '\n'.join(description_lines)
 
-        focus_summary = not summary
-        focus_description = not description
         # Update summary
         self.summary.set_value(summary, block=True)
         # Update description
         self.description.set_value(description, block=True)
-        # Focus the empty summary or description
-        if focus_summary:
-            self.summary.setFocus()
-        elif focus_description:
-            self.description.setFocus()
+
+        if self.description.hasFocus():
+            self.description.cursor_position.emit()
         else:
             self.summary.cursor_position.emit()
+
         self.update_actions()
 
     def set_expandtab(self, value):
@@ -633,15 +644,23 @@ class CommitMessageEditor(QtWidgets.QFrame):
     def _commit_finished(self, task):
         """Reset widget state on completion of the commit task"""
         title = N_('Commit failed')
-        status, out, err = task.result
-        Interaction.command(title, 'git commit', status, out, err)
-        self.bypass_commit_hooks_action.setChecked(False)
+        result = task.result
+        if isinstance(result, tuple) and len(result) == 3:
+            status, out, err = result
+            ok = status == 0
+            Interaction.command(title, 'git commit', status, out, err)
+        elif isinstance(result, bool):
+            ok = result
+        else:
+            ok = False
         # Author and date settings are not cleared unless the commit operation succeeds.
         # These settings are consumed when a commit is produced with their values.
-        if status == 0:
+        if ok:
+            self.bypass_commit_hooks_action.setChecked(False)
             self.set_commit_author(False, update=False)
             self.set_commit_date(False, update=True)
-        self.setFocus()
+            self.focus_summary()
+            self.summary.cursor_position.emit()
 
     def build_fixup_menu(self):
         count = prefs.fixup_commit_count(self.context)

@@ -1,11 +1,11 @@
 import functools
 
-from ..i18n import N_
 from .. import cmds
 from .. import hotkeys
 from .. import icons
 from .. import qtutils
 from .. import utils
+from ..i18n import N_
 
 
 def cmd_action(parent, cmd, context, func, *keys):
@@ -77,9 +77,13 @@ def terminal_action(context, parent, func=None, hotkey=None):
             parent,
             cmds.LaunchTerminal,
             context,
-            lambda: utils.select_directory(func()),
+            lambda: utils.select_directory(context.ops, func()),
         )
         action.setIcon(icons.terminal())
         if hotkey is not None:
             action.setShortcut(hotkey)
+
+        if context.ops.is_remote():
+            action.setEnabled(False)
+
     return action

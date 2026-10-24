@@ -1,16 +1,23 @@
+from __future__ import annotations
+from typing import TYPE_CHECKING
+
 from qtpy import QtCore
 from qtpy import QtWidgets
 
 from .. import icons
 from . import standard
 
+if TYPE_CHECKING:
+    from .app import ApplicationContext
+
 
 class FileTree(standard.TreeWidget):
     """A flag list of files presented using a tree widget"""
 
-    def __init__(self, parent=None):
+    def __init__(self, context: ApplicationContext, parent=None):
         standard.TreeWidget.__init__(self, parent=parent)
-        self.setSelectionMode(self.ExtendedSelection)
+        self.context = context
+        self.setSelectionMode(QtWidgets.QAbstractItemView.ExtendedSelection)
         self.setHeaderHidden(True)
 
     def set_filenames(self, filenames, select=False):

@@ -1,9 +1,14 @@
-from binascii import unhexlify
+from __future__ import annotations
 import collections
 import copy
 import fnmatch
 import os
 import struct
+from binascii import unhexlify
+from collections.abc import Callable
+from collections.abc import Iterator
+from typing import TYPE_CHECKING
+from typing import Any
 
 try:
     import pwd
@@ -17,24 +22,30 @@ from qtpy import QtCore
 from qtpy.QtCore import Signal
 
 from . import core
+from . import resources
 from . import utils
 from . import version
-from . import resources
+
+if TYPE_CHECKING:
+    from .app import ApplicationContext
+    from .types import ConfigValue
 
 
-def create(context):
+def create(context: ApplicationContext) -> GitConfig:
     """Create GitConfig instances"""
     return GitConfig(context)
 
 
-def _cache_key_from_paths(paths):
+def _cache_key_from_paths(
+    context: ApplicationContext, paths: list[Any | str]
+) -> list[float]:
     """Return a stat cache from the given paths"""
     if not paths:
         return None
-    mtimes = []
+    mtimes: list[float] = []
     for path in sorted(paths):
         try:
-            mtimes.append(core.stat(path).st_mtime)
+            mtimes.append(context.ops.stat(path).get('st_mtime'))
         except OSError:
             continue
     if mtimes:
@@ -42,21 +53,21 @@ def _cache_key_from_paths(paths):
     return None
 
 
-def _config_to_python(value):
+def _config_to_python(value: str) -> ConfigValue:
     """Convert a Git config string into a Python value"""
     if value in ('true', 'yes'):
-        value = True
+        value: bool = True
     elif value in ('false', 'no'):
-        value = False
+        value: bool = False
     else:
         try:
-            value = int(value)
+            value: int = int(value)
         except ValueError:
             pass
     return value
 
 
-def unhex(value):
+def unhex(value: str) -> bytes:
     """Convert a value (int or hex string) into bytes"""
     if isinstance(value, int):
         # If the value is an integer then it's a value that was converted
@@ -65,7 +76,7 @@ def unhex(value):
     return unhexlify(core.encode(value.lstrip('#')))
 
 
-def _config_key_value(line, splitchar):
+def _config_key_value(line: str, splitchar: str) -> tuple[str, Any]:
     """Split a config line into a (key, value) pair"""
     try:
         k, v = line.split(splitchar, 1)
@@ -77,7 +88,7 @@ def _config_key_value(line, splitchar):
     return k, _config_to_python(v)
 
 
-def _append_tab(value):
+def _append_tab(value: str) -> tuple[str, str]:
     """Return a value and the same value with tab appended"""
     return (value, value + '\t')
 
@@ -89,7 +100,7 @@ class GitConfig(QtCore.QObject):
     repo_config_changed = Signal(str, object)
     updated = Signal()
 
-    def __init__(self, context):
+    def __init__(self, context: ApplicationContext) -> None:
         super().__init__()
         self.context = context
         self.git = context.git
@@ -100,19 +111,19 @@ class GitConfig(QtCore.QObject):
         self._all = {}
         self._renamed_keys = {}
         self._multi_values = collections.defaultdict(list)
-        self._cache_key = None
+        self._cache_key: list[float] | None = None
         self._cache_paths = []
         self._attr_cache = {}
         self._binary_cache = {}
 
-    def reset(self):
+    def reset(self) -> None:
         self._cache_key = None
         self._cache_paths = []
         self._attr_cache.clear()
         self._binary_cache.clear()
         self.reset_values()
 
-    def reset_values(self):
+    def reset_values(self) -> None:
         self._system.clear()
         self._global.clear()
         self._global_or_system.clear()
@@ -121,26 +132,26 @@ class GitConfig(QtCore.QObject):
         self._renamed_keys.clear()
         self._multi_values.clear()
 
-    def user(self):
+    def user(self) -> dict[Any, Any]:
         return copy.deepcopy(self._global)
 
-    def repo(self):
+    def repo(self) -> dict[Any, Any]:
         return copy.deepcopy(self._local)
 
-    def all(self):
+    def all(self) -> dict[Any, Any]:
         return copy.deepcopy(self._all)
 
-    def _is_cached(self):
+    def _is_cached(self) -> bool | None:
         """
         Return True when the cache matches.
 
         Updates the cache and returns False when the cache does not match.
 
         """
-        cache_key = _cache_key_from_paths(self._cache_paths)
-        return self._cache_key and cache_key == self._cache_key
+        cache_key = _cache_key_from_paths(self.context, self._cache_paths)
+        return self._cache_key and cache_key == self._cache_key  # type: ignore[return-value]
 
-    def update(self):
+    def update(self) -> None:
         """Read git config value into the system, user and repo dicts."""
         if self._is_cached():
             return
@@ -193,12 +204,19 @@ class GitConfig(QtCore.QObject):
 
         # Update the cache
         self._cache_paths = sorted(cache_paths)
-        self._cache_key = _cache_key_from_paths(self._cache_paths)
+        self._cache_key = _cache_key_from_paths(self.context, self._cache_paths)
 
         # Send a notification that the configuration has been updated.
         self.updated.emit()
 
-    def _get(self, src, key, default, func=None, cached=True):
+    def _get(
+        self,
+        src: dict[str, ConfigValue],
+        key: str,
+        default: ConfigValue,
+        func: Callable[[], bool] | None = None,
+        cached: bool = True,
+    ) -> Any:
         if not cached or not src:
             self.update()
         try:
@@ -210,7 +228,7 @@ class GitConfig(QtCore.QObject):
                 value = default
         return value
 
-    def _get_value(self, src, key):
+    def _get_value(self, src: dict[str, ConfigValue], key: str) -> Any:
         """Return a value from the map"""
         try:
             return src[key]
@@ -225,11 +243,17 @@ class GitConfig(QtCore.QObject):
         # Allow the final KeyError to bubble up
         return src[key.lower()]
 
-    def get(self, key, default=None, func=None, cached=True):
+    def get(
+        self,
+        key: str,
+        default: ConfigValue | None = None,
+        func: Callable[[], bool] | None = None,
+        cached: bool = True,
+    ) -> Any:
         """Return the string value for a config key."""
         return self._get(self._all, key, default, func=func, cached=cached)
 
-    def get_all(self, key):
+    def get_all(self, key: str) -> list[Any]:
         """Return all values for a key sorted in priority order
 
         The purpose of this function is to group the values returned by
@@ -270,16 +294,16 @@ class GitConfig(QtCore.QObject):
         # Nothing found -> empty list.
         return []
 
-    def get_user(self, key, default=None):
+    def get_user(self, key, default=None) -> Any:
         return self._get(self._global, key, default)
 
-    def get_repo(self, key, default=None):
+    def get_repo(self, key: str, default: ConfigValue | None = None) -> str:
         return self._get(self._local, key, default)
 
-    def get_user_or_system(self, key, default=None):
+    def get_user_or_system(self, key, default=None) -> Any:
         return self._get(self._global_or_system, key, default)
 
-    def get_object_format(self):
+    def get_object_format(self) -> str:
         """Return the cached repostiory object format (sha256, sha1)"""
         try:
             object_format = self._get_value(self._all, 'extensions.objectformat')
@@ -287,7 +311,7 @@ class GitConfig(QtCore.QObject):
             object_format = 'sha1'
         return object_format
 
-    def set_user(self, key, value):
+    def set_user(self, key, value) -> None:
         if value in (None, ''):
             self.git.config('--global', key, unset=True, _readonly=True)
         else:
@@ -295,7 +319,7 @@ class GitConfig(QtCore.QObject):
         self.update()
         self.user_config_changed.emit(key, value)
 
-    def set_repo(self, key, value):
+    def set_repo(self, key, value) -> None:
         if value in (None, ''):
             self.git.config(key, unset=True, _readonly=True)
             self._local.pop(key, None)
@@ -305,7 +329,7 @@ class GitConfig(QtCore.QObject):
         self.updated.emit()
         self.repo_config_changed.emit(key, value)
 
-    def find(self, pat):
+    def find(self, pat: str) -> dict[str, str]:
         """Return a dict of values for all keys matching the specified pattern"""
         pat = pat.lower()
         match = fnmatch.fnmatch
@@ -317,19 +341,20 @@ class GitConfig(QtCore.QObject):
                 result[key] = val
         return result
 
-    def is_annex(self):
+    def is_annex(self) -> bool:
         """Return True when git-annex is enabled"""
         return bool(self.get('annex.uuid', default=False))
 
-    def gui_encoding(self):
+    def gui_encoding(self) -> Any:
         return self.get('gui.encoding', default=None)
 
-    def is_per_file_attrs_enabled(self):
+    def is_per_file_attrs_enabled(self) -> bool:
         return self.get(
-            'cola.fileattributes', func=lambda: os.path.exists('.gitattributes')
+            'cola.fileattributes',
+            func=lambda: self.context.ops.exists('.gitattributes'),
         )
 
-    def is_binary(self, path):
+    def is_binary(self, path) -> bool:
         """Return True if the file has the binary attribute set"""
         if not self.is_per_file_attrs_enabled():
             return None
@@ -340,16 +365,16 @@ class GitConfig(QtCore.QObject):
             value = cache[path] = self._is_binary(path)
         return value
 
-    def _is_binary(self, path):
+    def _is_binary(self, path) -> bool:
         """Return the file encoding for a path"""
         value = self.check_attr('binary', path)
         return value == 'set'
 
-    def is_reftable_extension_enabled(self):
+    def is_reftable_extension_enabled(self) -> bool:
         """Return True if the reftable storage backend is enabled"""
         return self.get_repo('extensions.refstorage', default='') == 'reftable'
 
-    def file_encoding(self, path):
+    def file_encoding(self, path) -> Any:
         if not self.is_per_file_attrs_enabled():
             return self.gui_encoding()
         cache = self._attr_cache
@@ -359,7 +384,7 @@ class GitConfig(QtCore.QObject):
             value = cache[path] = self._file_encoding(path) or self.gui_encoding()
         return value
 
-    def _file_encoding(self, path):
+    def _file_encoding(self, path) -> Any:
         """Return the file encoding for a path"""
         encoding = self.check_attr('encoding', path)
         if encoding in ('unspecified', 'unset', 'set'):
@@ -368,28 +393,28 @@ class GitConfig(QtCore.QObject):
             result = encoding
         return result
 
-    def check_attr(self, attr, path):
+    def check_attr(self, attr, path) -> str | None:
         """Check file attributes for a path"""
-        value = None
+        value: str | None = None
         status, out, _ = self.git.check_attr(attr, '--', path, _readonly=True)
         if status == 0:
             header = f'{path}: {attr}: '
             if out.startswith(header):
-                value = out[len(header) :].strip()
+                value: str | None = out[len(header) :].strip()
         return value
 
-    def get_author(self):
+    def get_author(self) -> tuple[str, str]:
         """Return (name, email) for authoring commits"""
         if _use_pwd:
             user = pwd.getpwuid(os.getuid()).pw_name
         else:
             user = os.getenv('USER', 'unknown')
 
-        name = self.get('user.name', user)
-        email = self.get('user.email', f'{user}@{core.node()}')
+        name: str = self.get('user.name', user)
+        email: str = self.get('user.email', f'{user}@{core.node()}')
         return (name, email)
 
-    def get_guitool_opts(self, name):
+    def get_guitool_opts(self, name) -> dict[Any, Any]:
         """Return the guitool.<name> namespace as a dict
 
         The dict keys are simplified so that "guitool.$name.cmd" is accessible
@@ -399,33 +424,37 @@ class GitConfig(QtCore.QObject):
         guitools = self.find(f'guitool.{name}.*')
         return utils.strip_prefixes_from_keys(guitools, f'guitool.{name}.')
 
-    def get_guitool_names(self):
+    def get_guitool_names(self) -> list[str]:
         """Return guitool names"""
         guitools = self.find('guitool.*.cmd')
         return utils.strip_prefixes_and_suffixes(guitools, 'guitool.', '.cmd')
 
-    def get_guitool_names_and_shortcuts(self):
+    def get_guitool_names_and_shortcuts(self) -> list[tuple[str, Any]]:
         """Return guitool names and their configured shortcut"""
         names = self.get_guitool_names()
         return [(name, self.get(f'guitool.{name}.shortcut')) for name in names]
 
-    def terminal(self):
+    def terminal(self) -> str:
         """Return a suitable terminal command for running a shell"""
         term = self.get('cola.terminal', default=None)
         if term:
             return term
 
         # find a suitable default terminal
-        if utils.is_win32():
+        if core.IS_WIN32:
             # Try to find Git's sh.exe directory in
             # one of the typical locations
-            pf = os.environ.get('ProgramFiles', r'C:\Program Files')
-            pf32 = os.environ.get('ProgramFiles(x86)', r'C:\Program Files (x86)')
-            pf64 = os.environ.get('ProgramW6432', r'C:\Program Files')
+            pf = self.context.ops.get_environ().get('ProgramFiles', r'C:\Program Files')
+            pf32 = self.context.ops.get_environ().get(
+                'ProgramFiles(x86)', r'C:\Program Files (x86)'
+            )
+            pf64 = self.context.ops.get_environ().get(
+                'ProgramW6432', r'C:\Program Files'
+            )
 
             for p in [pf64, pf32, pf, 'C:\\']:
                 candidate = os.path.join(p, r'Git\bin\sh.exe')
-                if os.path.isfile(candidate):
+                if self.context.ops.isfile(candidate):
                     return candidate
             return None
 
@@ -442,12 +471,12 @@ class GitConfig(QtCore.QObject):
             ('xterm', 'xterm -e'),
         )
         for executable, command in terminals:
-            if core.find_executable(executable):
+            if self.context.ops.find_executable(executable):
                 return command
         return None
 
-    def color(self, key, default):
-        value = self.get('cola.color.%s' % key, default=default)
+    def color(self, key: str, default: str) -> tuple[int, int, int]:
+        value = self.get(f'cola.color.{key}', default=default)
         struct_layout = core.encode('BBB')
         try:
             red, green, blue = struct.unpack(struct_layout, unhex(value))
@@ -455,17 +484,19 @@ class GitConfig(QtCore.QObject):
             red, green, blue = struct.unpack(struct_layout, unhex(default))
         return (red, green, blue)
 
-    def hooks(self):
+    def hooks(self) -> str:
         """Return the path to the git hooks directory"""
         gitdir_hooks = self.git.git_path('hooks')
         return self.get('core.hookspath', default=gitdir_hooks)
 
-    def hooks_path(self, *paths):
+    def hooks_path(self, *paths) -> str:
         """Return a path from within the git hooks directory"""
         return os.path.join(self.hooks(), *paths)
 
 
-def _read_config_with_scope(context, cache_paths, renamed_keys):
+def _read_config_with_scope(
+    context: ApplicationContext, cache_paths: set[Any], renamed_keys: dict[Any, Any]
+) -> Iterator[tuple[str, str, ConfigValue, bool],]:
     """Read the output from "git config --show-scope --show-origin --list
 
     ``--show-scope`` was introduced in Git v2.26.0.
@@ -493,13 +524,8 @@ def _read_config_with_scope(context, cache_paths, renamed_keys):
     for line in config_output.splitlines():
         if not line:
             continue
-        if (
-            line.startswith(system_key)
-            or line.startswith(global_key)
-            or line.startswith(local_key)
-            or line.startswith(command_key)
-            or line.startswith(worktree_key)  # worktree and unknown are uncommon.
-            or line.startswith(unknown_key)
+        if line.startswith(
+            (system_key, global_key, local_key, command_key, worktree_key, unknown_key)
         ):
             continuation = False
             current_scope, current_path, rest = line.split('\t', 2)
@@ -524,7 +550,9 @@ def _read_config_with_scope(context, cache_paths, renamed_keys):
         yield current_scope, current_key, current_value, continuation
 
 
-def _read_config_with_origin(context, cache_paths, renamed_keys):
+def _read_config_with_origin(
+    context: ApplicationContext, cache_paths, renamed_keys
+) -> Iterator[tuple[str, str, ConfigValue, bool]]:
     """Read the output from "git config --show-origin --list
 
     ``--show-origin`` was introduced in Git v2.8.0.
@@ -591,7 +619,9 @@ def _read_config_with_origin(context, cache_paths, renamed_keys):
         yield current_scope, current_key, current_value, continuation
 
 
-def _read_config_fallback(context, cache_paths, renamed_keys):
+def _read_config_fallback(
+    context: ApplicationContext, cache_paths, renamed_keys
+) -> Iterator[tuple[str, str, ConfigValue, bool]]:
     """Fallback config reader for Git < 2.8.0"""
     system_scope = 'system'
     global_scope = 'global'
@@ -599,7 +629,7 @@ def _read_config_fallback(context, cache_paths, renamed_keys):
     includes = version.check_git(context, 'config-includes')
 
     current_path = '/etc/gitconfig'
-    if os.path.exists(current_path):
+    if context.ops.exists(current_path):
         cache_paths.add(current_path)
         status, config_output, _ = context.git.config(
             z=True,
@@ -615,9 +645,9 @@ def _read_config_fallback(context, cache_paths, renamed_keys):
     gitconfig_home = core.expanduser(os.path.join('~', '.gitconfig'))
     gitconfig_xdg = resources.xdg_config_home('git', 'config')
 
-    if os.path.exists(gitconfig_home):
+    if context.ops.exists(gitconfig_home):
         gitconfig = gitconfig_home
-    elif os.path.exists(gitconfig_xdg):
+    elif context.ops.exists(gitconfig_xdg):
         gitconfig = gitconfig_xdg
     else:
         gitconfig = None
@@ -633,7 +663,7 @@ def _read_config_fallback(context, cache_paths, renamed_keys):
                 yield global_scope, key, value, False
 
     local_config = context.git.git_path('config')
-    if local_config and os.path.exists(local_config):
+    if local_config and context.ops.exists(local_config):
         cache_paths.add(gitconfig)
         status, config_output, _ = context.git.config(
             z=True,
@@ -647,7 +677,9 @@ def _read_config_fallback(context, cache_paths, renamed_keys):
                 yield local_scope, key, value, False
 
 
-def _read_config_from_null_list(config_output):
+def _read_config_from_null_list(
+    config_output,
+) -> Iterator[tuple[str, ConfigValue]]:
     """Parse the "git config --list -z" records"""
     for record in config_output.rstrip('\0').split('\0'):
         try:
@@ -658,7 +690,7 @@ def _read_config_from_null_list(config_output):
         yield (name, _config_to_python(value))
 
 
-def python_to_git(value):
+def python_to_git(value) -> str:
     if isinstance(value, bool):
         return 'true' if value else 'false'
     if isinstance(value, int):
@@ -666,7 +698,7 @@ def python_to_git(value):
     return value
 
 
-def get_remotes(cfg):
+def get_remotes(cfg: GitConfig) -> dict[str, str]:
     """Get all of the configured git remotes"""
     # Gather all of the remote.*.url entries.
     values = cfg.find('remote.*.url')

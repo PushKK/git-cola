@@ -1,4 +1,5 @@
 import textwrap
+from typing import TYPE_CHECKING
 
 from . import core
 from . import diffparse
@@ -7,8 +8,11 @@ from .i18n import N_
 from .interaction import Interaction
 from .models import prefs
 
+if TYPE_CHECKING:
+    from .app import ApplicationContext
 
-def wrap_comment(context, text):
+
+def wrap_comment(context: 'ApplicationContext', text: str) -> str:
     indent = prefs.comment_char(context) + ' '
     return (
         textwrap.fill(
@@ -21,14 +25,16 @@ def wrap_comment(context, text):
     )
 
 
-def strip_comments(context, text):
+def strip_comments(context: 'ApplicationContext', text: str) -> str:
     comment_char = prefs.comment_char(context)
     return '\n'.join(
         line for line in text.split('\n') if not line.startswith(comment_char)
     )
 
 
-def patch_edit_header(context, *, reverse, apply_to_worktree):
+def patch_edit_header(
+    context: 'ApplicationContext', *, reverse: bool, apply_to_worktree: bool
+) -> str:
     if apply_to_worktree:
         header = N_(
             'Edit the following patch, which will then be applied to the worktree to'
@@ -48,7 +54,7 @@ def patch_edit_header(context, *, reverse, apply_to_worktree):
     return wrap_comment(context, header)
 
 
-def patch_edit_footer(context):
+def patch_edit_footer(context: 'ApplicationContext'):
     parts = [
         '---',
         N_(
@@ -65,8 +71,15 @@ def patch_edit_footer(context):
     return ''.join(wrap_comment(context, part) for part in parts)
 
 
-def edit_patch(patch, encoding, context, *, reverse, apply_to_worktree):
-    patch_file_path = utils.tmp_filename('edit', '.patch')
+def edit_patch(
+    patch: diffparse.Patch,
+    encoding: str,
+    context: 'ApplicationContext',
+    *,
+    reverse: bool,
+    apply_to_worktree: bool
+):
+    patch_file_path = context.ops.tmp_filename('edit', '.patch')
     try:
         content_parts = [
             patch_edit_header(
@@ -75,8 +88,10 @@ def edit_patch(patch, encoding, context, *, reverse, apply_to_worktree):
             patch.as_text(file_headers=False),
             patch_edit_footer(context),
         ]
-        core.write(patch_file_path, ''.join(content_parts), encoding=encoding)
-        status, _, _ = core.run_command(
+        context.ops.write_file(
+            patch_file_path, ''.join(content_parts), encoding=encoding
+        )
+        status, _, _ = context.ops.run_command(
             [*utils.shell_split(prefs.editor(context)), patch_file_path]
         )
         if status == 0:
@@ -90,4 +105,4 @@ def edit_patch(patch, encoding, context, *, reverse, apply_to_worktree):
             patch_text = ''
         return diffparse.Patch.parse(patch.filename, patch_text)
     finally:
-        core.unlink(patch_file_path)
+        context.ops.unlink(patch_file_path)

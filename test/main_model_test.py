@@ -1,16 +1,19 @@
 import os
+from unittest.mock import Mock
 
 import pytest
 
 from cola import core
 from cola import git
+from cola import operations_local
 from cola.models import main
-from cola.models.main import FETCH, FETCH_HEAD, PULL, PUSH
+from cola.models.main import FETCH
+from cola.models.main import FETCH_HEAD
+from cola.models.main import PULL
+from cola.models.main import PUSH
 
 from . import helper
 from .helper import app_context
-from .helper import Mock
-
 
 # prevent unused imports lint errors.
 assert app_context is not None
@@ -24,7 +27,7 @@ REMOTE_BRANCH = 'remote'
 def mock_context():
     """Return a Mock context for testing"""
     context = Mock()
-    context.git = git.create()
+    context.git = git.create(operations_local.LocalOperations())
     return context
 
 
@@ -120,7 +123,7 @@ def test_remote_args_fetch(mock_context):
 def test_remote_args_fetch_head(mock_context):
     """Fetch handles the implicit FETCH_HEAD ref"""
     # When FETCH_HEAD is used then we should not specify a tracking branch target.
-    (args, kwargs) = main.remote_args(
+    (args, _kwargs) = main.remote_args(
         mock_context,
         REMOTE,
         FETCH,
@@ -147,7 +150,7 @@ def test_remote_args_fetch_tags(mock_context):
 
 
 def test_remote_args_fetch_into_tracking_branch(mock_context):
-    (args, kwargs) = main.remote_args(
+    (args, _kwargs) = main.remote_args(
         mock_context,
         REMOTE,
         FETCH,
@@ -256,6 +259,69 @@ def test_remote_args_rebase_only(mock_context):
     )
     assert kwargs['rebase']
     assert 'ff_only' not in kwargs
+
+
+def test_cola_msg_updated_when_not_manually_edited(app_context):
+    """GIT_COLA_MSG is loaded into the commit message on refresh
+
+    GIT_COLA_MSG update is applied when the user has not edited the message.
+    """
+    msg_path = app_context.git.git_path('GIT_COLA_MSG')
+    helper.write_file(msg_path, 'first message\n')
+    app_context.model._update_commitmsg()
+    assert app_context.model.commitmsg == 'first message\n'
+    helper.write_file(msg_path, 'updated message\n')
+    os.utime(msg_path, (os.path.getmtime(msg_path) + 1,) * 2)  # ensure mtime differs on coarse-grained filesystems
+    app_context.model._update_commitmsg()
+    assert app_context.model.commitmsg == 'updated message\n'
+
+
+def test_cola_msg_not_overwritten_when_user_edited(app_context):
+    """User's manual edits are preserved when GIT_COLA_MSG is updated externally"""
+    msg_path = app_context.git.git_path('GIT_COLA_MSG')
+    helper.write_file(msg_path, 'first message\n')
+    app_context.model._update_commitmsg()
+    app_context.model.commitmsg = 'user message'
+    helper.write_file(msg_path, 'second message\n')
+    os.utime(msg_path, (os.path.getmtime(msg_path) + 1,) * 2)  # ensure mtime differs on coarse-grained filesystems
+    app_context.model._update_commitmsg()
+    assert app_context.model.commitmsg == 'user message'
+
+
+def test_cola_msg_suppressed_during_merge(app_context):
+    """GIT_COLA_MSG is not loaded while a merge message is active"""
+    msg_path = app_context.git.git_path('GIT_COLA_MSG')
+    merge_path = app_context.git.git_path('MERGE_MSG')
+    helper.write_file(msg_path, 'agent message\n')
+    helper.write_file(merge_path, 'merge commit message\n')
+    app_context.model._update_commitmsg()
+    assert app_context.model.commitmsg == 'merge commit message'
+    os.unlink(merge_path)
+
+
+def test_cola_msg_loaded_after_merge_clears(app_context):
+    """GIT_COLA_MSG is loaded once the merge auto-message cycle completes
+
+    Sequence:
+      - merge sets auto-msg
+      - merge file removed
+      - _prev_commitmsg (empty) restored
+      - next refresh loads GIT_COLA_MSG replacing empty commitmsg.
+    """
+    msg_path = app_context.git.git_path('GIT_COLA_MSG')
+    merge_path = app_context.git.git_path('MERGE_MSG')
+    helper.write_file(msg_path, 'agent message\n')
+    helper.write_file(merge_path, 'merge commit message\n')
+    # First refresh: merge msg is picked up, GIT_COLA_MSG ignored
+    app_context.model._update_commitmsg()
+    assert app_context.model.commitmsg == 'merge commit message'
+    # Merge completes: MERGE_MSG file disappears
+    os.unlink(merge_path)
+    # Second refresh: clears _auto_commitmsg and restore _prev_commitmsg ('')
+    app_context.model._update_commitmsg()
+    # Third refresh: GIT_COLA_MSG is now loaded because commitmsg is empty
+    app_context.model._update_commitmsg()
+    assert app_context.model.commitmsg == 'agent message\n'
 
 
 def test_run_remote_action(mock_context):

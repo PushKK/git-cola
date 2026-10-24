@@ -1,5 +1,8 @@
 """Display models and utility functions"""
 import collections
+from datetime import datetime
+from typing import TYPE_CHECKING
+from typing import Any
 
 try:
     import notify2
@@ -13,11 +16,13 @@ except ImportError:
 from . import resources
 from .models import prefs
 
+if TYPE_CHECKING:
+    from .app import ApplicationContext
 
 NOTIFICATIONS_AVAILABLE = bool(notify2 or notifypy)
 
 
-def shorten_paths(source_paths):
+def shorten_paths(source_paths) -> dict[Any, Any]:
     """Shorten a sequence of paths into unique strings for display"""
     result = {}
     # Start by assuming that all paths are in conflict.
@@ -56,19 +61,19 @@ def shorten_paths(source_paths):
     return result
 
 
-def path_suffix(path, count):
+def path_suffix(path: str, count: int) -> str:
     """Return `count` number of trailing path components"""
     path = normalize_path(path)
     components = path.split('/')[-count:]
     return '/'.join(components)
 
 
-def normalize_path(path):
+def normalize_path(path: str) -> str:
     """Normalize a path so that only "/" is used as a separator"""
     return path.replace('\\', '/')
 
 
-def notify(context, title, message, icon):
+def notify(context: 'ApplicationContext', title: str, message: str, icon) -> None:
     """Send a notification using notify2 xor notifypy"""
     app_name = context.app_name
     if notify2:
@@ -86,13 +91,19 @@ def notify(context, title, message, icon):
         context.notifier.log.emit(f'{title}: {message}')
 
 
-def push_notification(context, title, message, error=False, allow_popups=True):
+def push_notification(
+    context: 'ApplicationContext',
+    title: str,
+    message: str,
+    error: bool = False,
+    allow_popups: bool = True,
+) -> None:
     """Emit a push notification"""
     if prefs.enable_popups(context) and allow_popups:
         if error:
-            context.notifier.critical.emit(title, dict(message=message))
+            context.notifier.critical.emit(title, {'message': message})
         else:
-            context.notifier.information.emit(title, dict(message=message))
+            context.notifier.information.emit(title, {'message': message})
     else:
         if error:
             icon = resources.icon_path('git-cola-error.svg')
@@ -101,6 +112,6 @@ def push_notification(context, title, message, error=False, allow_popups=True):
         notify(context, title, message, icon)
 
 
-def git_commit_date(datetime):
+def git_commit_date(datetime: datetime) -> str:
     """Return the datetime as a string for use by Git"""
     return datetime.strftime('%a %b %d %H:%M:%S %Y %z')

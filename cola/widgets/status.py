@@ -1,30 +1,36 @@
+from __future__ import annotations
 import itertools
 import os
 from functools import partial
+from typing import TYPE_CHECKING
 
-from qtpy.QtCore import Qt
 from qtpy import QtCore
 from qtpy import QtWidgets
+from qtpy.QtCore import Qt
 
-from ..i18n import N_
-from ..models import prefs
-from ..models import selection
-from ..widgets import gitignore
-from ..widgets import standard
-from ..qtutils import get
-from ..settings import Settings
 from .. import actions
 from .. import cmds
-from .. import core
 from .. import difftool
+from .. import fields
 from .. import hotkeys
 from .. import icons
 from .. import qtutils
 from .. import utils
+from ..i18n import N_
+from ..models import prefs
+from ..models import selection
+from ..qtutils import get
+from ..settings import Settings
+from ..widgets import gitignore
+from ..widgets import standard
 from . import common
 from . import completion
 from . import defs
+from . import diff
 from . import text
+
+if TYPE_CHECKING:
+    from ..app import ApplicationContext
 
 
 # Top-level status widget item indexes.
@@ -132,9 +138,6 @@ class StatusWidget(QtWidgets.QFrame):
 
 
 class StatusTreeWidget(QtWidgets.QTreeWidget):
-    # Read-only access to the mode state
-    mode = property(lambda self: self._model.mode)
-
     def __init__(self, context, parent=None):
         QtWidgets.QTreeWidget.__init__(self, parent)
         self.context = context
@@ -194,7 +197,11 @@ class StatusTreeWidget(QtWidgets.QTreeWidget):
         self.revert_unstaged_edits_action = qtutils.add_action(
             self,
             cmds.RevertUnstagedEdits.name(),
-            cmds.run(cmds.RevertUnstagedEdits, context),
+            cmds.run(
+                cmds.RevertUnstagedEdits,
+                context,
+                details_display_fn=self.details_display_fn,
+            ),
             hotkeys.REVERT,
             hotkeys.REVERT_ALT,
         )
@@ -335,6 +342,14 @@ class StatusTreeWidget(QtWidgets.QTreeWidget):
         self.itemDoubleClicked.connect(cmds.run(cmds.StageOrUnstage, self.context))
         self.itemCollapsed.connect(lambda x: self._update_column_widths())
         self.itemExpanded.connect(lambda x: self._update_column_widths())
+
+    def details_display_fn(self, parent):
+        """Show details in a DiffTextEdit when confirming reverts"""
+        mainview_settings = self.context.settings.gui_state.get(fields.MAINVIEW)
+        numbers = mainview_settings.get(fields.SHOW_DIFF_LINE_NUMBERS, True)
+        return diff.DiffTextEdit(
+            self.context, parent, numbers=numbers, numbers_visible=numbers
+        )
 
     def _make_current_item_visible(self):
         item = self.currentItem()
@@ -589,8 +604,25 @@ class StatusTreeWidget(QtWidgets.QTreeWidget):
         return entry
 
     def _save_selection(self):
-        self.old_contents = self.contents()
-        self.old_selection = self.selection()
+        # This runs from the queued about_to_update signal, which is delivered
+        # after the model has already swapped in the new file lists. Reading the
+        # live model here (self.contents()/self.selection()) would map the tree's
+        # still-old selected rows against the new path lists and record the wrong
+        # paths -- e.g. staging a,b,c would report the following d,e as selected.
+        # previous_contents is emitted just before about_to_update and holds the
+        # pre-update lists, so use it to snapshot the old contents and selection.
+        old = self.previous_contents
+        if old is None:
+            self.old_contents = self.contents()
+            self.old_selection = self.selection()
+        else:
+            self.old_contents = old
+            self.old_selection = selection.State(
+                qtutils.get_selected_values(self, STAGED_IDX, old.staged),
+                qtutils.get_selected_values(self, UNMERGED_IDX, old.unmerged),
+                qtutils.get_selected_values(self, MODIFIED_IDX, old.modified),
+                qtutils.get_selected_values(self, UNTRACKED_IDX, old.untracked),
+            )
         self.old_current_item = self.current_item()
 
     def refresh(self):
@@ -639,7 +671,7 @@ class StatusTreeWidget(QtWidgets.QTreeWidget):
 
     def _set_unmerged(self, items):
         """Adds items to the 'Unmerged' sub-tree."""
-        deleted_set = {path for path in items if not core.exists(path)}
+        deleted_set = {path for path in items if not self.context.ops.exists(path)}
         with qtutils.BlockSignals(self):
             self._set_subtree(
                 items, UNMERGED_IDX, N_('Unmerged'), deleted_set=deleted_set
@@ -666,7 +698,10 @@ class StatusTreeWidget(QtWidgets.QTreeWidget):
         for item in items:
             deleted = deleted_set is not None and item in deleted_set
             treeitem = qtutils.create_treeitem(
-                item, staged=staged, deleted=deleted, untracked=untracked
+                item,
+                staged=staged,
+                deleted=deleted,
+                untracked=untracked,
             )
             parent.addChild(treeitem)
         self._expand_items(idx, items)
@@ -833,7 +868,7 @@ class StatusTreeWidget(QtWidgets.QTreeWidget):
 
         # Do all of the selected items exist?
         all_exist = all(
-            i not in self._model.staged_deleted and core.exists(i)
+            i not in self._model.staged_deleted and self.context.ops.exists(i)
             for i in self.staged()
         )
 
@@ -849,7 +884,7 @@ class StatusTreeWidget(QtWidgets.QTreeWidget):
 
     def _create_staged_submodule_context_menu(self, menu, s):
         context = self.context
-        path = core.abspath(s.staged[0])
+        path = self.context.ops.abspath(s.staged[0])
         if len(self.staged()) == 1:
             menu.addAction(
                 icons.cola(),
@@ -910,7 +945,7 @@ class StatusTreeWidget(QtWidgets.QTreeWidget):
 
         # Do all of the selected items exist?
         all_exist = all(
-            i not in self._model.unstaged_deleted and core.exists(i)
+            i not in self._model.unstaged_deleted and self.context.ops.exists(i)
             for i in self.staged()
         )
 
@@ -924,7 +959,7 @@ class StatusTreeWidget(QtWidgets.QTreeWidget):
         if all_exist and s.untracked:
             # Git Annex / Git LFS
             annex = self._model.annex
-            lfs = core.find_executable('git-lfs')
+            lfs = self.context.ops.find_executable('git-lfs')
             if annex or lfs:
                 menu.addSeparator()
             if annex:
@@ -937,11 +972,13 @@ class StatusTreeWidget(QtWidgets.QTreeWidget):
                 menu.addAction(self.move_to_trash_action)
             menu.addAction(self.delete_untracked_files_action)
             menu.addSeparator()
-            menu.addAction(
+            action = menu.addAction(
                 icons.edit(),
                 N_('Ignore...'),
                 partial(gitignore.gitignore_view, self.context),
             )
+            if self.context.ops.is_remote():
+                action.setEnabled(False)
 
         if not self.selection_model.is_empty():
             menu.addAction(self.view_history_action)
@@ -950,7 +987,7 @@ class StatusTreeWidget(QtWidgets.QTreeWidget):
 
     def _create_modified_submodule_context_menu(self, menu, s):
         context = self.context
-        path = core.abspath(s.modified[0])
+        path = self.context.ops.abspath(s.modified[0])
         if len(self.unstaged()) == 1:
             menu.addAction(
                 icons.cola(),
@@ -1103,6 +1140,10 @@ class StatusTreeWidget(QtWidgets.QTreeWidget):
     def untracked_items(self):
         return qtutils.get_selected_items(self, UNTRACKED_IDX)
 
+    def copy(self):
+        """Called by FocusProxy when Cmd+C / Ctrl+C is pressed."""
+        copy_path(self.context)
+
     def show_selection(self):
         """Show the selected item."""
         context = self.context
@@ -1189,6 +1230,7 @@ class StatusTreeWidget(QtWidgets.QTreeWidget):
             runtask.run(
                 cmds.run(cmds.ShowUntracked, context, path, finalizer=finalizer)
             )
+        runtask.threadpool.waitForDone(64)
 
     def select_header(self):
         """Select an active header, which triggers a diffstat"""
@@ -1259,7 +1301,7 @@ class StatusTreeWidget(QtWidgets.QTreeWidget):
     def mimeData(self, items):
         """Return a list of absolute-path URLs"""
         context = self.context
-        paths = qtutils.paths_from_items(items, item_filter=_item_filter)
+        paths = qtutils.paths_from_items(context, items, item_filter=_item_filter)
         include_urls = not self._alt_drag
         return qtutils.mimedata_from_paths(context, paths, include_urls=include_urls)
 
@@ -1268,9 +1310,9 @@ class StatusTreeWidget(QtWidgets.QTreeWidget):
         return qtutils.path_mimetypes(include_urls=not self._alt_drag)
 
 
-def _item_filter(item):
+def _item_filter(context: ApplicationContext, item):
     """Filter items down to just those that exist on disk"""
-    return not item.deleted and core.exists(item.path)
+    return not item.deleted and context.ops.exists(item.path)
 
 
 def view_blame(context):
@@ -1284,9 +1326,13 @@ def view_history(context):
 
 
 def copy_path(context, absolute=True):
-    """Copy a selected path to the clipboard"""
-    filename = context.selection.filename()
-    qtutils.copy_path(filename, absolute=absolute)
+    """Copy selected path(s) to the clipboard"""
+    filenames = context.selection.group()
+    if not filenames:
+        return
+    if absolute:
+        filenames = [context.ops.abspath(f) for f in filenames]
+    qtutils.set_clipboard('\n'.join(filenames))
 
 
 def copy_relpath(context):
@@ -1295,30 +1341,49 @@ def copy_relpath(context):
 
 
 def copy_basename(context):
-    filename = os.path.basename(context.selection.filename())
-    basename, _ = os.path.splitext(filename)
-    qtutils.copy_path(basename, absolute=False)
+    filenames = context.selection.group()
+    if not filenames:
+        return
+    basenames = []
+    for f in filenames:
+        basename, _ = os.path.splitext(os.path.basename(f))
+        basenames.append(basename)
+    qtutils.set_clipboard('\n'.join(basenames))
 
 
 def copy_leading_path(context, strip_components):
-    """Peal off trailing path components and copy the current path to the clipboard"""
-    filename = context.selection.filename()
-    value = filename
-    for _ in range(strip_components):
-        value = os.path.dirname(value)
-    qtutils.copy_path(value, absolute=False)
+    """Peel off trailing path components and copy the current path(s) to the clipboard"""
+    filenames = context.selection.group()
+    if not filenames:
+        return
+    seen = set()
+    values = []
+    for filename in filenames:
+        value = filename
+        for _ in range(strip_components):
+            value = os.path.dirname(value)
+        if value not in seen:
+            seen.add(value)
+            values.append(value)
+    qtutils.set_clipboard('\n'.join(values))
 
 
 def copy_format(context, fmt):
     """Add variables usable in the custom Copy format strings"""
-    values = {}
-    values['path'] = path = context.selection.filename()
-    values['abspath'] = abspath = os.path.abspath(path)
-    values['absdirname'] = os.path.dirname(abspath)
-    values['dirname'] = os.path.dirname(path)
-    values['filename'] = os.path.basename(path)
-    values['basename'], values['ext'] = os.path.splitext(os.path.basename(path))
-    qtutils.set_clipboard(fmt % values)
+    filenames = context.selection.group()
+    if not filenames:
+        return
+    lines = []
+    for path in filenames:
+        values = {}
+        values['path'] = path
+        values['abspath'] = abspath = context.ops.abspath(path)
+        values['absdirname'] = os.path.dirname(abspath)
+        values['dirname'] = os.path.dirname(path)
+        values['filename'] = os.path.basename(path)
+        values['basename'], values['ext'] = os.path.splitext(os.path.basename(path))
+        lines.append(fmt % values)
+    qtutils.set_clipboard('\n'.join(lines))
 
 
 def show_help(context):
@@ -1480,7 +1545,7 @@ class CustomizeCopyActions(standard.Dialog):
         for item in items:
             rows.add(self.table.row(item))
 
-        for row in reversed(sorted(rows)):
+        for row in sorted(rows, reverse=True):
             self.table.removeRow(row)
 
     def save(self):
@@ -1675,7 +1740,7 @@ class CopyLeadingPathWidget(QtWidgets.QWidget):
         text_rgb, highlight_text_rgb = theme.text_colors_rgb()
         disabled_text_rgb = theme.disabled_text_color_rgb()
 
-        stylesheet = """
+        stylesheet = f"""
             * {{
                 show-decoration-selected: 1
             }}
@@ -1692,12 +1757,7 @@ class CopyLeadingPathWidget(QtWidgets.QWidget):
             QLabel:disabled {{
                 color: {disabled_text_rgb};
             }}
-        """.format(
-            disabled_text_rgb=disabled_text_rgb,
-            text_rgb=text_rgb,
-            highlight_text_rgb=highlight_text_rgb,
-            highlight_rgb=highlight_rgb,
-        )
+        """
 
         self.setStyleSheet(stylesheet)
 

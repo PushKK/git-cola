@@ -1,19 +1,12 @@
 """Widgets for Fetch, Push, and Pull"""
 import fnmatch
 import time
-import os
 
+from qtpy import QtCore
 from qtpy import QtGui
 from qtpy import QtWidgets
 from qtpy.QtCore import Qt
 
-from ..i18n import N_
-from ..interaction import Interaction
-from ..models import main
-from ..models import prefs
-from ..models.main import FETCH, FETCH_HEAD, PULL, PUSH
-from ..qtutils import connect_button
-from ..qtutils import get
 from .. import core
 from .. import display
 from .. import git
@@ -21,6 +14,16 @@ from .. import gitcmds
 from .. import icons
 from .. import qtutils
 from .. import utils
+from ..i18n import N_
+from ..interaction import Interaction
+from ..models import main
+from ..models import prefs
+from ..models.main import FETCH
+from ..models.main import FETCH_HEAD
+from ..models.main import PULL
+from ..models.main import PUSH
+from ..qtutils import connect_button
+from ..qtutils import get
 from . import defs
 from . import log
 from . import standard
@@ -135,6 +138,40 @@ def _emit_push_notification(
     )
 
 
+class RemoteList(QtWidgets.QListWidget):
+    """Interact with a list of remotes"""
+
+    def __init__(self, context, action, parent=None):
+        super().__init__(parent)
+        self.context = context
+        self.values = context.model.remotes
+        if action == PUSH:
+            mode = QtWidgets.QAbstractItemView.ExtendedSelection
+            self.setSelectionMode(mode)
+        self.addItems(self.values)
+
+    def event(self, event):
+        """Display remote details in a tooltip"""
+        if event.type() == QtCore.QEvent.ToolTip:
+            pos = event.pos()
+            item = self.itemAt(pos)
+            if item:
+                idx = self.row(item)
+                if idx < len(self.values):
+                    remote = self.values[idx]
+                    status, remote_details, _ = self.context.git.remote(
+                        'show', '-n', remote
+                    )
+                    if status == 0:
+                        QtWidgets.QToolTip.showText(
+                            event.globalPos(), remote_details, self
+                        )
+            else:
+                QtWidgets.QToolTip.hideText()
+            return True
+        return super().event(event)
+
+
 class RemoteActionDialog(standard.Dialog):
     """Interface for performing remote operations"""
 
@@ -174,12 +211,7 @@ class RemoteActionDialog(standard.Dialog):
         self.remote_name.editingFinished.connect(self.remote_name_edited)
         self.remote_name.textEdited.connect(lambda _: self.remote_name_edited())
 
-        self.remotes = QtWidgets.QListWidget()
-        if action == PUSH:
-            mode = QtWidgets.QAbstractItemView.ExtendedSelection
-            self.remotes.setSelectionMode(mode)
-        self.remotes.addItems(model.remotes)
-
+        self.remotes = RemoteList(context, action)
         self.remote_branch_label = QtWidgets.QLabel()
         self.remote_branch_label.setText(N_('Remote Branch'))
 
@@ -353,7 +385,8 @@ class RemoteActionDialog(standard.Dialog):
             self.command_display,
             self.options_layout,
         )
-        self.main_layout.setStretchFactor(self.top_layout, 2)
+        self.main_layout.setStretchFactor(self.top_layout, 3)
+        self.main_layout.setStretchFactor(self.command_display, 1)
         self.setLayout(self.main_layout)
 
         remotes = model.remotes
@@ -447,7 +480,8 @@ class RemoteActionDialog(standard.Dialog):
 
     def update_command_display(self):
         """Display the git commands that will be run"""
-        commands = ['']
+        commands = []
+        remote_details = []
         for remote in self.selected_remotes:
             cmd = ['git', self.action]
             _, kwargs = self.common_args()
@@ -455,6 +489,15 @@ class RemoteActionDialog(standard.Dialog):
             cmd.extend(git.transform_kwargs(**kwargs))
             cmd.extend(args)
             commands.append(core.list2cmdline(cmd))
+
+            url = self.model.remote_url(remote, self.action)
+            remote_details.append(f'# {remote} ({url})')
+
+        if remote_details:
+            commands.append('')
+            commands.append('# Remotes')
+            commands.extend(remote_details)
+
         self.command_display.set_output('\n'.join(commands))
 
     def local_branch_text_changed(self, value):
@@ -493,12 +536,16 @@ class RemoteActionDialog(standard.Dialog):
 
     def select_remote(self, idx, make_current=True):
         """Select a remote by index"""
+        try:
+            remote_name = self.model.remotes[idx]
+        except IndexError:
+            return False
         item = self.remotes.item(idx)
         if item:
             item.setSelected(True)
             if make_current:
                 self.remotes.setCurrentItem(item)
-                self.set_remote_name(item.text())
+                self.set_remote_name(remote_name)
             result = True
         else:
             result = False
@@ -830,7 +877,7 @@ class RemoteActionDialog(standard.Dialog):
             return
 
         status, out, err = task.result
-        command = 'git %s' % self.action
+        command = f'git {self.action}'
         message = Interaction.format_command_status(command, status)
         details = Interaction.format_out_err(out, err)
 
@@ -900,7 +947,7 @@ class RemoteActionDialog(standard.Dialog):
         """Prune stale worktrees from the persistent selected_remotes_by_worktree"""
         worktrees = list(self.selected_remotes_by_worktree.keys())
         for worktree in worktrees:
-            if not os.path.exists(worktree):
+            if not self.context.ops.exists(worktree):  # TODO this is loop with guts that could be batched to minimize network request round trips.
                 self.selected_remotes_by_worktree.pop(worktree, None)
 
 
@@ -933,6 +980,38 @@ class Push(RemoteActionDialog):
 
     def __init__(self, context, parent=None):
         super().__init__(context, PUSH, N_('Push'), parent=parent, icon=icons.push())
+        self.remember_upstream_checkbox_state = False
+        self.upstream_checkbox.toggled.connect(self.upstream_checkbox_toggled)
+
+    def upstream_checkbox_toggled(self, enabled):
+        """Prompt once when enabling upstream.
+
+        Choose between one-time and remembered behavior.
+        """
+        if not enabled:
+            self.remember_upstream_checkbox_state = False
+            return
+        if self.remember_upstream_checkbox_state:
+            return
+        title = N_('Set upstream')
+        msg = N_(
+            'The upstream branch will be configured when branches are pushed.\n'
+            'This can affect all subsequent pushes.'
+        )
+        info_txt = N_(
+            'Do you want this setting to be remembered and apply to future pushes?'
+        )
+        ok_text = N_('Yes, remember this setting for future pushes')
+        cancel_text = N_('No, enable this setting just once for the next push')
+        self.remember_upstream_checkbox_state = Interaction.confirm(
+            title,
+            msg,
+            info_txt,
+            ok_text,
+            default=False,
+            cancel_text=cancel_text,
+            icon=icons.question(),
+        )
 
     def export_state(self):
         """Export persistent settings"""
@@ -940,6 +1019,10 @@ class Push(RemoteActionDialog):
         state['force'] = get(self.force_checkbox)
         state['prompt'] = get(self.prompt_checkbox)
         state['tags'] = get(self.tags_checkbox)
+        if self.remember_upstream_checkbox_state:
+            state['set_upstream_branch'] = get(self.upstream_checkbox)
+        else:
+            state.pop('set_upstream_branch', None)
         return state
 
     def apply_state(self, state):
@@ -954,6 +1037,10 @@ class Push(RemoteActionDialog):
         # Restore the "tags" checkbox
         tags = bool(state.get('tags', False))
         self.tags_checkbox.setChecked(tags)
+        set_upstream_branch = bool(state.get('set_upstream_branch', False))
+        self.remember_upstream_checkbox_state = set_upstream_branch
+        with qtutils.BlockSignals(self.upstream_checkbox):
+            self.upstream_checkbox.setChecked(set_upstream_branch)
         return result
 
 

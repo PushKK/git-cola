@@ -5,15 +5,15 @@ from qtpy import QtWidgets
 from qtpy.QtCore import Qt
 from qtpy.QtCore import Signal
 
-from ..git import STDOUT
-from ..i18n import N_
-from ..qtutils import get
 from .. import cmds
 from .. import core
 from .. import gitcmds
 from .. import icons
 from .. import qtutils
 from .. import utils
+from ..git import STDOUT
+from ..i18n import N_
+from ..qtutils import get
 from . import completion
 from . import defs
 from . import standard
@@ -513,6 +513,6 @@ class RemoteWidget(QtWidgets.QWidget):
     def open_repo(self):
         """Set the URL from a repository on disk"""
         git = self.context.git
-        repo = qtutils.opendir_dialog(N_('Open Git Repository'), core.getcwd())
+        repo = qtutils.opendir_dialog(N_('Open Git Repository'), core.getcwd())  # TODO make this work on remote
         if repo and git.is_git_repository(repo):
             self.url = repo

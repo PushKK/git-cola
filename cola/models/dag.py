@@ -1,5 +1,7 @@
+from __future__ import annotations
 import datetime
 import json
+from collections.abc import Iterator
 
 from .. import core
 from .. import utils
@@ -24,7 +26,9 @@ class CommitFactory:
         cls.root_generation = 0
 
     @classmethod
-    def new(cls, context, oid=None, log_entry=None):
+    def new(
+        cls, context, oid: str | None = None, log_entry: str | None = None
+    ) -> Commit:
         if not oid and log_entry:
             oid = log_entry[: context.model.oid_len]
         try:
@@ -42,19 +46,19 @@ class CommitFactory:
 
 
 class DAG:
-    def __init__(self, ref, count) -> None:
+    def __init__(self, ref: str, count: int) -> None:
         self.ref = ref
         self.count = count
         self.display_status = True
         self.overrides = {}
 
-    def set_ref(self, ref) -> bool:
+    def set_ref(self, ref: str) -> bool:
         changed = ref != self.ref
         if changed:
             self.ref = ref
         return changed
 
-    def set_count(self, count) -> bool:
+    def set_count(self, count: int) -> bool:
         changed = count != self.count
         if changed:
             self.count = count
@@ -71,14 +75,14 @@ class DAG:
             if self.set_ref(ref):
                 self.overrides['ref'] = ref
 
-    def set_display_status(self, enabled) -> None:
+    def set_display_status(self, enabled: bool) -> None:
         """Should we display the worktree status?"""
         self.display_status = enabled
 
-    def overridden(self, opt) -> bool:
+    def overridden(self, opt: str) -> bool:
         return opt in self.overrides
 
-    def paths(self):
+    def paths(self) -> list[str]:
         all_refs = utils.shell_split(self.ref)
         if '--' in all_refs:
             all_refs = all_refs[all_refs.index('--') :]
@@ -90,33 +94,35 @@ class Commit:
     root_generation = 0
 
     __slots__ = (
-        'context',
-        'oid',
-        'summary',
-        'parents',
-        'children',
-        'branches',
-        'tags',
-        'author',
         'authdate',
+        'author',
+        'branches',
+        'children',
+        'column',
+        'context',
         'email',
         'generation',
-        'column',
-        'row',
+        'oid',
+        'parents',
         'parsed',
+        'row',
+        'summary',
+        'tags',
     )
 
-    def __init__(self, context, oid=None, log_entry=None) -> None:
+    def __init__(
+        self, context, oid: str | None = None, log_entry: str | None = None
+    ) -> None:
         self.context = context
         self.oid = oid
-        self.summary = None
-        self.parents = []
+        self.summary: str | None = None
+        self.parents: list[Commit] = []
         self.children = []
-        self.tags = []
+        self.tags: list[str] = []
         self.branches = []
-        self.email = None
-        self.author = None
-        self.authdate = None
+        self.email: str | None = None
+        self.author: str | None = None
+        self.authdate: str | None = None
         self.parsed = False
         self.generation = CommitFactory.root_generation
         self.column = None
@@ -124,7 +130,7 @@ class Commit:
         if log_entry:
             self.parse(log_entry)
 
-    def parse(self, log_entry, sep=LOGSEP):
+    def parse(self, log_entry: str, sep: str = LOGSEP):
         oid_len = self.context.model.oid_len
         self.oid = log_entry[:oid_len]
         after_oid = log_entry[oid_len + 1 :]
@@ -154,16 +160,13 @@ class Commit:
         self.parsed = True
         return self
 
-    def add_label(self, tag) -> None:
+    def add_label(self, tag: str) -> None:
         """Add tag/branch labels from `git log --decorate ....`"""
-        if tag.startswith('tag: '):
-            tag = tag[5:]  # strip off "tag: " leaving refs/tags/
+        tag = tag.removeprefix('tag: ')  # strip off "tag: " leaving refs/tags/
         if tag.startswith('refs/heads/'):
             branch = tag[11:]
             self.branches.append(branch)
-        if tag.startswith('refs/'):
-            # strip off refs/ leaving just tags/XXX remotes/XXX heads/XXX
-            tag = tag[5:]
+        tag = tag.removeprefix('refs/')
         if tag.endswith('/HEAD'):
             return
 
@@ -202,10 +205,10 @@ class Commit:
         else:
             self.tags.append(tag)
 
-    def __str__(self):
+    def __str__(self) -> str | None:
         return self.oid
 
-    def data(self):
+    def data(self) -> dict[str, str | None | list[str | None] | list[str]]:
         return {
             'oid': self.oid,
             'summary': self.summary,
@@ -228,13 +231,13 @@ class Commit:
 
 
 class RepoReader:
-    def __init__(self, context, params, allow_git_init=True) -> None:
+    def __init__(self, context, params: DAG, allow_git_init: bool = True) -> None:
         self.context = context
         self.params = params
         self.git = context.git
         self.returncode = 0
         self._allow_git_init = allow_git_init
-        self._objects = {}
+        self._objects: dict[str, Commit] = {}
         self._cmd = [
             'git',
             '-c',
@@ -262,7 +265,7 @@ class RepoReader:
         self._cached = False
         self._topo_list = []
 
-    def get(self):
+    def get(self) -> Iterator[Commit]:
         """Generator function returns Commit objects found by the params"""
         if self._cached:
             for commit in self._topo_list:
@@ -274,7 +277,7 @@ class RepoReader:
         cmd = (
             self._cmd
             + ['-%d' % self.params.count]
-            + ['--date=%s' % prefs.logdate(self.context)]
+            + [f'--date={prefs.logdate(self.context)}']
             + ['--no-patch']
             + ref_args
         )
@@ -306,7 +309,7 @@ class RepoReader:
         self._cached = True
         self.returncode = status
 
-    def get_worktree_commits(self):
+    def get_worktree_commits(self) -> tuple[Commit | None, Commit | None]:
         """A Commit object that represents unstaged modified changes in a worktree"""
         if self.returncode != 0 or not self.params.display_status:
             return None, None
@@ -377,10 +380,10 @@ class RepoReader:
 
         return stage_commit, worktree_commit
 
-    def __getitem__(self, oid):
+    def __getitem__(self, oid: str) -> Commit:
         return self._objects[oid]
 
-    def items(self):
+    def items(self) -> list[tuple[str, Commit]]:
         return list(self._objects.items())
 
 

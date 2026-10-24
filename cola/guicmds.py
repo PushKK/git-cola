@@ -1,4 +1,8 @@
+from __future__ import annotations
 import os
+from collections.abc import Callable
+from typing import TYPE_CHECKING
+from typing import Any
 
 from qtpy import QtGui
 
@@ -8,6 +12,7 @@ from . import difftool
 from . import display
 from . import gitcmds
 from . import icons
+from . import operations
 from . import qtutils
 from . import resources
 from .i18n import N_
@@ -19,15 +24,20 @@ from .widgets.browse import BrowseBranch
 from .widgets.selectcommits import select_commits
 from .widgets.selectcommits import select_commits_and_output
 
+if TYPE_CHECKING:
+    from qtpy import QtWidgets
 
-def copy_commit_id_to_clipboard(context):
+    from .app import ApplicationContext
+
+
+def copy_commit_id_to_clipboard(context: ApplicationContext) -> None:
     """Copy the current commit ID to the clipboard"""
     status, commit_id, _ = context.git.rev_parse('HEAD')
     if status == 0 and commit_id:
         qtutils.set_clipboard(commit_id)
 
 
-def delete_branch(context):
+def delete_branch(context: ApplicationContext) -> None:
     """Launch the 'Delete Branch' dialog."""
     icon = icons.discard()
     branch = choose_branch(context, N_('Delete Branch'), N_('Delete'), icon=icon)
@@ -36,7 +46,7 @@ def delete_branch(context):
     cmds.do(cmds.DeleteBranch, context, branch)
 
 
-def delete_remote_branch(context):
+def delete_remote_branch(context: ApplicationContext) -> None:
     """Launch the 'Delete Remote Branch' dialog."""
     remote_branch = choose_remote_branch(
         context, N_('Delete Remote Branch'), N_('Delete'), icon=icons.discard()
@@ -48,13 +58,13 @@ def delete_remote_branch(context):
         cmds.do(cmds.DeleteRemoteBranch, context, remote, branch)
 
 
-def browse_current(context):
+def browse_current(context: ApplicationContext) -> None:
     """Launch the 'Browse Current Branch' dialog."""
     branch = gitcmds.current_branch(context)
     BrowseBranch.browse(context, branch)
 
 
-def browse_other(context):
+def browse_other(context: ApplicationContext) -> None:
     """Prompt for a branch and inspect content at that point in time."""
     # Prompt for a branch to browse
     branch = choose_ref(context, N_('Browse Commits...'), N_('Browse'))
@@ -63,7 +73,7 @@ def browse_other(context):
     BrowseBranch.browse(context, branch)
 
 
-def checkout_branch(context, default=None):
+def checkout_branch(context: ApplicationContext, default: Any = None) -> None:
     """Launch the 'Checkout Branch' dialog."""
     branch = choose_potential_branch(
         context, N_('Checkout Branch'), N_('Checkout'), default=default
@@ -73,7 +83,7 @@ def checkout_branch(context, default=None):
     cmds.do(cmds.CheckoutBranch, context, branch)
 
 
-def cherry_pick(context):
+def cherry_pick(context: ApplicationContext) -> None:
     """Launch the 'Cherry-Pick' dialog."""
     revs, summaries = gitcmds.log_helper(context, all=True)
     commits = select_commits(
@@ -84,14 +94,14 @@ def cherry_pick(context):
     cmds.do(cmds.CherryPick, context, commits)
 
 
-def new_repo(context):
+def new_repo(context: ApplicationContext) -> str | None:
     """Prompt for a new directory and create a new Git repository
 
     :returns str: repository path or None if no repository was created.
 
     """
     git = context.git
-    path = qtutils.opendir_dialog(N_('New Repository...'), core.getcwd())
+    path = qtutils.opendir_dialog(N_('New Repository...'), context.ops.getcwd())
     if not path:
         return None
     # Avoid needlessly calling `git init`.
@@ -110,7 +120,7 @@ def new_repo(context):
     return None
 
 
-def open_new_repo(context):
+def open_new_repo(context: ApplicationContext) -> None:
     """Create a new repository and open it"""
     dirname = new_repo(context)
     if not dirname:
@@ -118,10 +128,10 @@ def open_new_repo(context):
     cmds.do(cmds.OpenRepo, context, dirname)
 
 
-def new_bare_repo(context):
+def new_bare_repo(context: ApplicationContext) -> str | None:
     """Create a bare repository and configure a remote pointing to it"""
     result = None
-    repo = prompt_for_new_bare_repo()
+    repo = prompt_for_new_bare_repo(context.ops)
     if not repo:
         return result
     # Create bare repo
@@ -139,14 +149,14 @@ def new_bare_repo(context):
     return result
 
 
-def prompt_for_new_bare_repo():
+def prompt_for_new_bare_repo(ops: operations.IOperations) -> str | None:
     """Prompt for a directory and name for a new bare repository"""
-    path = qtutils.opendir_dialog(N_('Select Directory...'), core.getcwd())
+    path = qtutils.opendir_dialog(N_('Select Directory...'), ops.getcwd())
     if not path:
         return None
 
     bare_repo = None
-    default = os.path.basename(core.getcwd())
+    default = os.path.basename(ops.getcwd())
     if not default.endswith('.git'):
         default += '.git'
     while not bare_repo:
@@ -160,7 +170,7 @@ def prompt_for_new_bare_repo():
         if not name.endswith('.git'):
             name += '.git'
         repo = os.path.join(path, name)
-        if core.isdir(repo):
+        if ops.isdir(repo):
             Interaction.critical(N_('Error'), N_('"%s" already exists') % repo)
         else:
             bare_repo = repo
@@ -168,7 +178,7 @@ def prompt_for_new_bare_repo():
     return bare_repo
 
 
-def export_patches(context):
+def export_patches(context: ApplicationContext) -> None:
     """Run 'git format-patch' on a list of commits."""
     revs, summaries = gitcmds.log_helper(context)
     to_export_and_output = select_commits_and_output(
@@ -186,7 +196,7 @@ def export_patches(context):
     )
 
 
-def diff_against_commit(context):
+def diff_against_commit(context: ApplicationContext) -> None:
     """Diff against any commit and checkout changes using the Diff Editor"""
     icon = icons.compare()
     ref = choose_ref(context, N_('Diff Against Commit'), N_('Diff'), icon=icon)
@@ -195,7 +205,7 @@ def diff_against_commit(context):
     cmds.do(cmds.DiffAgainstCommitMode, context, ref)
 
 
-def diff_expression(context):
+def diff_expression(context: ApplicationContext) -> None:
     """Diff using an arbitrary expression."""
     tracked = gitcmds.tracked_branch(context)
     current = gitcmds.current_branch(context)
@@ -206,7 +216,7 @@ def diff_expression(context):
     difftool.diff_expression(context, qtutils.active_window(), ref)
 
 
-def open_repo(context):
+def open_repo(context: ApplicationContext) -> None:
     """Open a repository in the current window"""
     model = context.model
     dirname = qtutils.opendir_dialog(N_('Open Git Repository'), model.getcwd())
@@ -215,7 +225,7 @@ def open_repo(context):
     cmds.do(cmds.OpenRepo, context, dirname)
 
 
-def open_repo_in_new_window(context):
+def open_repo_in_new_window(context: ApplicationContext) -> None:
     """Spawn a new cola session."""
     model = context.model
     dirname = qtutils.opendir_dialog(N_('Open Git Repository'), model.getcwd())
@@ -224,7 +234,9 @@ def open_repo_in_new_window(context):
     cmds.do(cmds.OpenNewRepo, context, dirname)
 
 
-def open_quick_repo_search(context, open_repo=True, parent=None):
+def open_quick_repo_search(
+    context: ApplicationContext, open_repo: bool = True, parent=None
+) -> switcher.SwitcherInnerView | None:
     """Open a Quick Repository Search dialog"""
     if parent is None:
         parent = qtutils.active_window()
@@ -257,24 +269,24 @@ def open_quick_repo_search(context, open_repo=True, parent=None):
             added.add(key)
 
         title = N_('Quick Open Repository')
-        place_holder = N_('Search repositories by name...')
+        placeholder = N_('Search repositories by name...')
         if open_repo:
-            open_cmd = cmds.OpenRepo
+            open_cmd: type[cmds.NoOp | cmds.OpenRepo] = cmds.OpenRepo
         else:
-            open_cmd = cmds.NoOp
+            open_cmd: type[cmds.NoOp | cmds.OpenRepo] = cmds.NoOp
 
         return switcher.switcher_inner_view(
             context,
             entries,
             title,
-            place_holder=place_holder,
+            placeholder=placeholder,
             enter_action=lambda entry: cmds.do(open_cmd, context, entry.key),
             parent=parent,
         )
     return None
 
 
-def load_commitmsg(context):
+def load_commitmsg(context: ApplicationContext) -> None:
     """Load a commit message from a file."""
     model = context.model
     filename = qtutils.open_file(N_('Load Commit Message'), directory=model.getcwd())
@@ -282,27 +294,44 @@ def load_commitmsg(context):
         cmds.do(cmds.LoadCommitMessageFromFile, context, filename)
 
 
-def choose_from_dialog(get, context, title, button_text, default, icon=None):
+def choose_from_dialog(
+    get: Callable,
+    context: ApplicationContext,
+    title: str,
+    button_text: str,
+    default: str | int | None,
+    icon: None = None,
+) -> str | None:
     """Choose a value from a dialog using the `get` method"""
     parent = qtutils.active_window()
     return get(context, title, button_text, parent, default=default, icon=icon)
 
 
-def choose_ref(context, title, button_text, default=None, icon=None):
+def choose_ref(
+    context: ApplicationContext,
+    title: str,
+    button_text: str,
+    default: str | int | None = None,
+    icon: QtGui.QIcon | None = None,
+) -> str | None:
     """Choose a Git ref and return it"""
     return choose_from_dialog(
         completion.GitRefDialog.get, context, title, button_text, default, icon=icon
     )
 
 
-def choose_branch(context, title, button_text, default=None, icon=None):
+def choose_branch(
+    context: ApplicationContext, title, button_text, default=None, icon=None
+) -> str | None:
     """Choose a branch and return either the chosen branch or an empty value"""
     return choose_from_dialog(
         completion.GitBranchDialog.get, context, title, button_text, default, icon=icon
     )
 
 
-def choose_potential_branch(context, title, button_text, default=None, icon=None):
+def choose_potential_branch(
+    context: ApplicationContext, title, button_text, default=None, icon=None
+) -> str | None:
     """Choose a "potential" branch for checking out.
 
     This dialog includes remote branches from which new local branches can be created.
@@ -317,7 +346,9 @@ def choose_potential_branch(context, title, button_text, default=None, icon=None
     )
 
 
-def choose_remote_branch(context, title, button_text, default=None, icon=None):
+def choose_remote_branch(
+    context: ApplicationContext, title, button_text, default=None, icon=None
+) -> str | None:
     """Choose a remote branch"""
     return choose_from_dialog(
         completion.GitRemoteBranchDialog.get,
@@ -329,7 +360,7 @@ def choose_remote_branch(context, title, button_text, default=None, icon=None):
     )
 
 
-def review_branch(context):
+def review_branch(context: ApplicationContext) -> None:
     """Diff against an arbitrary revision, branch, tag, etc."""
     branch = choose_ref(context, N_('Select Branch to Review'), N_('Review'))
     if not branch:
@@ -338,7 +369,7 @@ def review_branch(context):
     difftool.diff_commits(context, qtutils.active_window(), merge_base, branch)
 
 
-def rename_branch(context):
+def rename_branch(context: ApplicationContext) -> None:
     """Launch the 'Rename Branch' dialogs."""
     branch = choose_branch(context, N_('Rename Existing Branch'), N_('Select'))
     if not branch:
@@ -349,7 +380,7 @@ def rename_branch(context):
     cmds.do(cmds.RenameBranch, context, branch, new_branch)
 
 
-def reset_soft(context):
+def reset_soft(context: ApplicationContext) -> None:
     """Run "git reset --soft" to reset the branch HEAD"""
     title = N_('Reset Branch (Soft)')
     ok_text = N_('Reset Branch')
@@ -360,7 +391,7 @@ def reset_soft(context):
         context.settings.set_value('reset::soft', 'ref', ref)
 
 
-def reset_mixed(context):
+def reset_mixed(context: ApplicationContext) -> None:
     """Run "git reset --mixed" to reset the branch HEAD and staging area"""
     title = N_('Reset Branch and Stage (Mixed)')
     ok_text = N_('Reset')
@@ -371,7 +402,7 @@ def reset_mixed(context):
         context.settings.set_value('reset::mixed', 'ref', ref)
 
 
-def reset_keep(context):
+def reset_keep(context: ApplicationContext) -> None:
     """Run "git reset --keep" safe reset to avoid clobbering local changes"""
     title = N_('Reset All (Keep Unstaged Changes)')
     default = context.settings.get_value('reset::keep', 'ref', default='HEAD^')
@@ -381,7 +412,7 @@ def reset_keep(context):
         context.settings.set_value('reset::keep', 'ref', ref)
 
 
-def reset_merge(context):
+def reset_merge(context: ApplicationContext) -> None:
     """Run "git reset --merge" to reset the working tree and staging area
 
     The staging area is allowed to carry forward unmerged index entries,
@@ -397,7 +428,7 @@ def reset_merge(context):
         context.settings.set_value('reset::merge', 'ref', ref)
 
 
-def reset_hard(context):
+def reset_hard(context: ApplicationContext) -> None:
     """Run "git reset --hard" to fully reset the working tree and staging area"""
     title = N_('Restore Worktree and Reset All (Hard)')
     ok_text = N_('Reset and Restore')
@@ -408,7 +439,7 @@ def reset_hard(context):
         context.settings.set_value('reset::hard', 'ref', ref)
 
 
-def restore_worktree(context):
+def restore_worktree(context: ApplicationContext) -> None:
     """Restore the worktree to the content from the specified commit"""
     title = N_('Restore Worktree')
     ok_text = N_('Restore Worktree')
@@ -419,11 +450,11 @@ def restore_worktree(context):
         context.settings.set_value('restore::worktree', 'ref', ref)
 
 
-def build_layout_menu(widget, menu):
+def build_layout_menu(widget: QtWidgets.QWidget, menu: QtWidgets.QMenu) -> None:
     """Add layouts from ~/.config/git-cola/layouts to the specified menu"""
     directory = resources.xdg_config_home('git-cola', 'layouts')
-    if os.path.isdir(directory):
-        layouts = sorted(os.listdir(directory))
+    if core.isdir(directory):
+        layouts = sorted(core.listdir(directory))
     else:
         layouts = []
     suffix = '.layout'
@@ -443,14 +474,14 @@ def build_layout_menu(widget, menu):
         menu.addAction(load_layout_action)
 
 
-def save_layout(widget):
+def save_layout(widget: QtWidgets.QWidget) -> None:
     """Save the current widget layout to a file"""
     default_filename = resources.xdg_config_home(
         'git-cola', 'layouts', 'default.layout'
     )
     parent_dir = os.path.dirname(default_filename)
-    if not os.path.isdir(parent_dir):
-        os.makedirs(parent_dir)
+    if not core.isdir(parent_dir):
+        core.makedirs(parent_dir)
     filename = qtutils.save_as(default_filename)
     if not filename:
         return
@@ -459,18 +490,18 @@ def save_layout(widget):
         output.write(state)
 
 
-def load_layout(widget):
+def load_layout(widget: QtWidgets.QWidget) -> None:
     """Choose a Qt layout file and apply it to the current widget"""
     directory = resources.xdg_config_home('git-cola', 'layouts')
-    if not os.path.isdir(directory):
-        os.makedirs(directory)
+    if not core.isdir(directory):
+        core.makedirs(directory)
     filename = qtutils.existing_file(directory, title=N_('Load Layout'))
     load_layout_file(widget, filename)
 
 
-def load_layout_file(widget, filename):
+def load_layout_file(widget: QtWidgets.QWidget, filename: Any) -> None:
     """Load a Qt layout file into the specified widget"""
-    if not filename or not os.path.isfile(filename):
+    if not filename or not core.isfile(filename):
         return
     with open(filename, 'rb') as handle:
         state = handle.read()
@@ -478,6 +509,6 @@ def load_layout_file(widget, filename):
         widget.apply_layout(state)
 
 
-def install():
+def install() -> None:
     """Install the GUI-model interaction hooks"""
-    Interaction.choose_ref = staticmethod(choose_ref)
+    Interaction.choose_ref = staticmethod(choose_ref)  # type: ignore[assignment,method-assign]

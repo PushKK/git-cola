@@ -1,3 +1,6 @@
+from __future__ import annotations
+from collections.abc import Callable
+
 from qtpy import QtCore
 from qtpy import QtGui
 from qtpy import QtWidgets
@@ -11,22 +14,31 @@ except ImportError:
 from . import hotkeys
 
 
-def patch(obj, attr, value):
+def patch(
+    obj: type[QtWidgets.QGraphicsItem | QtGui.QKeySequence],
+    attr: str,
+    value: Callable | QtGui.QKeySequence,
+) -> None:
     if not hasattr(obj, attr):
         setattr(obj, attr, value)
 
 
-def install():
+def install() -> None:
     patch(QtWidgets.QGraphicsItem, 'mapRectToScene', _map_rect_to_scene)
     patch(QtGui.QKeySequence, 'Preferences', hotkeys.PREFERENCES)
 
 
-def add_search_path(prefix, path):
+def add_search_path(prefix: str, path: str) -> None:
     if hasattr(QtCore.QDir, 'addSearchPath'):
         QtCore.QDir.addSearchPath(prefix, path)
 
 
-def set_common_dock_options(window):
+def set_search_paths(prefix: str, paths: list[str]) -> None:
+    if hasattr(QtCore.QDir, 'setSearchPaths'):
+        QtCore.QDir.setSearchPaths(prefix, paths)
+
+
+def set_common_dock_options(window) -> None:
     if not hasattr(window, 'setDockOptions'):
         return
     nested = QtWidgets.QMainWindow.AllowNestedDocks

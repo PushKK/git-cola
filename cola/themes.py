@@ -1,6 +1,8 @@
 """Themes generators"""
+from __future__ import annotations
 import os
-
+from typing import TYPE_CHECKING
+from typing import Any
 
 try:
     import AppKit
@@ -8,13 +10,16 @@ except ImportError:
     AppKit = None
 from qtpy import QtGui
 
-from .i18n import N_
-from .widgets import defs
 from . import core
 from . import icons
 from . import qtutils
 from . import resources
-from . import utils
+from .i18n import N_
+from .widgets import defs
+
+if TYPE_CHECKING:
+    from qtpy.QtGui import QColor
+    from qtpy.QtGui import QPalette
 
 
 class EStylesheet:
@@ -26,27 +31,27 @@ class EStylesheet:
 class Theme:
     def __init__(
         self,
-        name,
-        title,
-        is_dark,
-        style_sheet=EStylesheet.DEFAULT,
-        main_color=None,
-        macos_appearance=None,
-    ):
+        name: str,
+        title: str,
+        is_dark: bool,
+        style_sheet: int = EStylesheet.DEFAULT,
+        main_color: str | None = None,
+        macos_appearance: None = None,
+    ) -> None:
         self.name = name
         self.title = title
         self.is_dark = is_dark
-        self.is_palette_dark = None
+        self.is_palette_dark: bool | None = None
         self.style_sheet = style_sheet
         self.main_color = main_color
         self.macos_appearance = macos_appearance
-        self.disabled_text_color = None
-        self.text_color = None
-        self.highlight_color = None
-        self.background_color = None
-        self.palette = None
+        self.disabled_text_color: str | None = None
+        self.text_color: str | None = None
+        self.highlight_color: str | None = None
+        self.background_color: str | None = None
+        self.palette: QPalette | None = None
 
-    def build_style_sheet(self, app_palette, bold_fonts):
+    def build_style_sheet(self, app_palette: QPalette, bold_fonts: bool) -> str:
         if self.style_sheet == EStylesheet.CUSTOM:
             return self.style_sheet_custom(app_palette, bold_fonts)
         if self.style_sheet == EStylesheet.FLAT:
@@ -55,7 +60,7 @@ class Theme:
         self.is_palette_dark = window.lightnessF() < 0.5
         return style_sheet_default(app_palette, bold_fonts)
 
-    def build_palette(self, app_palette):
+    def build_palette(self, app_palette: QPalette):
         QPalette = QtGui.QPalette
         palette_dark = app_palette.color(QPalette.Base).lightnessF() < 0.5
         if self.is_palette_dark is None:
@@ -81,7 +86,7 @@ class Theme:
         self.palette = palette
         return palette
 
-    def style_sheet_flat(self, bold_fonts):
+    def style_sheet_flat(self, bold_fonts: Any) -> str:
         main_color = self.main_color
         color = qtutils.css_color(main_color)
         color_rgb = qtutils.rgb_css(color)
@@ -123,7 +128,7 @@ class Theme:
         else:
             font_weight = ''
 
-        return """
+        return f"""
             /* regular widgets */
             * {{
                 {font_weight}
@@ -174,7 +179,7 @@ class Theme:
 
             /* buttons */
             QPushButton[flat="false"] {{
-                background-color: {button};
+                background-color: {color_rgb};
                 color: {button_text};
                 border-radius: 2px;
                 border-width: 0;
@@ -217,10 +222,10 @@ class Theme:
                 background: transparent;
             }}
             QMenuBar::item:selected {{
-                background: {button};
+                background: {color_rgb};
             }}
             QMenuBar::item:pressed {{
-                background: {button};
+                background: {color_rgb};
             }}
             QMenu {{
                 background-color: {field};
@@ -251,10 +256,10 @@ class Theme:
                 width: 0;
             }}
             QComboBox::drop-down:hover {{
-                border-color: {button} {field} {field} {field};
+                border-color: {color_rgb} {field} {field} {field};
             }}
             QComboBox:item {{
-                background-color: {button};
+                background-color: {color_rgb};
                 color: {button_text};
                 border-width: 0;
                 height: 22px;
@@ -270,8 +275,8 @@ class Theme:
 
             /* MainWindow separator */
             QMainWindow::separator {{
-                width: {separator}px;
-                height: {separator}px;
+                width: {defs.separator}px;
+                height: {defs.separator}px;
             }}
             QMainWindow::separator:hover {{
                 background: {focus};
@@ -286,7 +291,7 @@ class Theme:
                  background: {lighter}
             }}
             QScrollBar::handle:hover {{
-                 background: {button}
+                 background: {color_rgb}
             }}
             QScrollBar:horizontal {{
                 margin: 0 11px 0 11px;
@@ -304,7 +309,7 @@ class Theme:
                 subcontrol-position: left;
             }}
             QScrollBar::add-line:hover, QScrollBar::sub-line:hover {{
-                background: {button};
+                background: {color_rgb};
             }}
             QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {{
                 width: 10px;
@@ -339,20 +344,20 @@ class Theme:
                 border-width: 4px 3px 0 3px;
             }}
             QScrollBar:right-arrow:hover {{
-                border-color: {button} {button}
-                              {button} {darker};
+                border-color: {color_rgb} {color_rgb}
+                              {color_rgb} {darker};
             }}
             QScrollBar:left-arrow:hover {{
-                border-color: {button} {darker}
-                              {button} {button};
+                border-color: {color_rgb} {darker}
+                              {color_rgb} {color_rgb};
             }}
             QScrollBar:up-arrow:hover {{
-                border-color: {button} {button}
-                              {darker} {button};
+                border-color: {color_rgb} {color_rgb}
+                              {darker} {color_rgb};
             }}
             QScrollBar:down-arrow:hover {{
-                border-color: {darker} {button}
-                              {button} {button};
+                border-color: {darker} {color_rgb}
+                              {color_rgb} {color_rgb};
             }}
 
             /* tab bar (stacked & docked widgets) */
@@ -383,7 +388,7 @@ class Theme:
                 width: 13px;
             }}
             QCheckBox::indicator:unchecked:hover {{
-                background-color: {button};
+                background-color: {color_rgb};
             }}
             QCheckBox::indicator:unchecked:pressed {{
                 background-color: {darker};
@@ -392,7 +397,7 @@ class Theme:
                 background-color: {darker};
             }}
             QCheckBox::indicator:checked:hover {{
-                background-color: {button};
+                background-color: {color_rgb};
             }}
             QCheckBox::indicator:checked:pressed {{
                 background-color: {field};
@@ -414,7 +419,7 @@ class Theme:
                 border: 1px solid {darker};
             }}
             QProgressBar::chunk {{
-                background-color: {button};
+                background-color: {color_rgb};
                 width: 1px;
             }}
 
@@ -432,7 +437,7 @@ class Theme:
                 border-width: 0 3px 4px 3px;
             }}
             QAbstractSpinBox::up-arrow:hover {{
-                border-color: {field} {field} {button} {field};
+                border-color: {field} {field} {color_rgb} {field};
                 border-width: 0 3px 4px 3px;
             }}
             QAbstractSpinBox::down-arrow {{
@@ -440,7 +445,7 @@ class Theme:
                 border-width: 4px 3px 0 3px;
             }}
             QAbstractSpinBox::down-arrow:hover {{
-                border-color: {button} {field} {field} {field};
+                border-color: {color_rgb} {field} {field} {field};
                 border-width: 4px 3px 0 3px;
             }}
 
@@ -479,21 +484,9 @@ class Theme:
                 padding-left: 4px;
             }}
 
-            """.format(
-            background=background,
-            field=field,
-            font_weight=font_weight,
-            button=color_rgb,
-            darker=darker,
-            lighter=lighter,
-            grayed=grayed,
-            button_text=button_text,
-            field_text=field_text,
-            separator=defs.separator,
-            focus=focus,
-        )
+            """
 
-    def style_sheet_custom(self, app_palette, bold_fonts):
+    def style_sheet_custom(self, app_palette: QPalette, bold_fonts: Any):
         """Get custom style sheet.
         File name is saved in variable self.name.
         If user has deleted file, use default style"""
@@ -508,7 +501,7 @@ class Theme:
             core.print_stderr(f'warning: unable to read custom theme {filename}: {err}')
             return style_sheet_default(app_palette, bold_fonts)
 
-    def get_palette(self):
+    def get_palette(self) -> QPalette:
         """Get a QPalette for the current theme"""
         if self.palette is None:
             palette = qtutils.current_palette()
@@ -516,7 +509,7 @@ class Theme:
             palette = self.palette
         return palette
 
-    def highlight_color_rgb(self):
+    def highlight_color_rgb(self) -> str:
         """Return an rgb(r,g,b) CSS color value for the selection highlight"""
         if self.highlight_color:
             highlight_rgb = self.highlight_color
@@ -530,7 +523,7 @@ class Theme:
             highlight_rgb = qtutils.rgb_css(color)
         return highlight_rgb
 
-    def selection_color(self):
+    def selection_color(self) -> QColor:
         """Return a color suitable for selections"""
         highlight = qtutils.css_color(self.highlight_color_rgb())
         if highlight.lightnessF() > 0.7:  # Avoid clamping light colors to white.
@@ -539,7 +532,7 @@ class Theme:
             color = highlight.lighter()
         return color
 
-    def text_colors_rgb(self):
+    def text_colors_rgb(self) -> tuple[str, str]:
         """Return a pair of rgb(r,g,b) CSS color values for text and selected text"""
         if self.text_color:
             text_rgb = self.text_color
@@ -553,7 +546,7 @@ class Theme:
             highlight_text_rgb = qtutils.rgb_css(color)
         return text_rgb, highlight_text_rgb
 
-    def disabled_text_color_rgb(self):
+    def disabled_text_color_rgb(self) -> str:
         """Return an rgb(r,g,b) CSS color value for the disabled text"""
         if self.disabled_text_color:
             disabled_text_rgb = self.disabled_text_color
@@ -563,7 +556,7 @@ class Theme:
             disabled_text_rgb = qtutils.rgb_css(color)
         return disabled_text_rgb
 
-    def background_color_rgb(self):
+    def background_color_rgb(self) -> str:
         """Return an rgb(r,g,b) CSS color value for the window background"""
         if self.background_color:
             background_color = self.background_color
@@ -574,7 +567,7 @@ class Theme:
         return background_color
 
 
-def style_sheet_default(palette, bold_fonts):
+def style_sheet_default(palette: QPalette, bold_fonts: bool) -> str:
     highlight = palette.color(QtGui.QPalette.Highlight)
     shadow = palette.color(QtGui.QPalette.Shadow)
     base = palette.color(QtGui.QPalette.Base)
@@ -587,10 +580,16 @@ def style_sheet_default(palette, bold_fonts):
     else:
         font_weight = ''
 
-    return """
-        * {{
-            {font_weight}
-        }}
+    # macOS renders native checkboxes and radios that align correctly and look
+    # like the rest of the platform. Restyling their indicators via a stylesheet
+    # resizes the box but leaves QMacStyle positioning it against the native
+    # (smaller) metrics, which pushes the indicator out of vertical alignment
+    # with its label. Keep the native controls there and only restyle the
+    # indicators on platforms where the palette-based default looks out of place.
+    if core.IS_DARWIN:
+        checkbox_style = ''
+    else:
+        checkbox_style = """
         QCheckBox::indicator {{
             width: {checkbox_size}px;
             height: {checkbox_size}px;
@@ -620,7 +619,16 @@ def style_sheet_default(palette, bold_fonts):
             border-radius: {radio_radius}px;
             background: {base_rgb};
         }}
+        """
 
+    style_sheet = (
+        """
+        * {{
+            {font_weight}
+        }}
+        """
+        + checkbox_style
+        + """
         QSplitter::handle:hover {{
             background: {highlight_rgb};
         }}
@@ -634,7 +642,9 @@ def style_sheet_default(palette, bold_fonts):
             background: {highlight_rgb};
         }}
 
-        """.format(
+        """
+    )
+    return style_sheet.format(
         font_weight=font_weight,
         separator=defs.separator,
         highlight_rgb=highlight_rgb,
@@ -650,7 +660,7 @@ def style_sheet_default(palette, bold_fonts):
     )
 
 
-def get_all_themes():
+def get_all_themes() -> list[Theme]:
     themes = [
         Theme(
             'default',
@@ -661,7 +671,7 @@ def get_all_themes():
         ),
     ]
 
-    if utils.is_darwin():
+    if core.IS_DARWIN:
         themes.extend(get_macos_themes().values())
 
     themes.extend([
@@ -725,7 +735,7 @@ def get_all_themes():
 
     # check if themes path exists in user folder
     path = resources.config_home('themes')
-    if not os.path.isdir(path):
+    if not core.isdir(path):
         return themes
 
     # Gather Qt .qss stylesheet themes
@@ -742,11 +752,11 @@ def get_all_themes():
     return themes
 
 
-def apply_platform_theme(theme):
+def apply_platform_theme(theme: Theme) -> None:
     """Apply platform-specific themes (e.g. dark mode on macOS)"""
     # https://developer.apple.com/documentation/appkit/nsappearancecustomization/choosing_a_specific_appearance_for_your_macos_app
     # https://github.com/git-cola/git-cola/issues/905#issuecomment-461118465
-    if utils.is_darwin():
+    if core.IS_DARWIN:
         if AppKit is None:
             return
         app = AppKit.NSApplication.sharedApplication()
@@ -767,7 +777,7 @@ def get_macos_themes():
     if AppKit is None:
         return themes
 
-    def add_macos_theme(name, description, is_dark, attr):
+    def add_macos_theme(name, description, is_dark, attr) -> None:
         """Add an AppKit theme if it exists"""
         if hasattr(AppKit, attr):
             themes[name] = Theme(
@@ -798,14 +808,14 @@ def get_macos_themes():
     return themes
 
 
-def options(themes=None):
+def options(themes: list[Theme] | None = None):
     """Return a dictionary mapping display names to theme names"""
     if themes is None:
         themes = get_all_themes()
     return [(theme.title, theme.name) for theme in themes]
 
 
-def find_theme(name):
+def find_theme(name: str) -> Theme:
     themes = get_all_themes()
     for item in themes:
         if item.name == name:

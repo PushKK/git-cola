@@ -1,4 +1,5 @@
 """Miscellaneous utility functions"""
+from __future__ import annotations
 import copy
 import hashlib
 import os
@@ -10,15 +11,26 @@ import tempfile
 import time
 import traceback
 import urllib.parse
+from collections.abc import Callable
+from typing import TYPE_CHECKING
+from typing import Any
+from typing import TypeVar
 
 from . import core
-from . import compat
+from . import operations
 
+if TYPE_CHECKING:
+    from qtpy.QtWidgets import QAction
+
+    from .app import ApplicationContext
+    from .types import TextType
 
 _SSH_REGEX = re.compile(r'^(?P<user>[^@]+)@(?P<hostname>[^:]+):(?P<path>.+)')
 
+NumberT = TypeVar('NumberT', int, float)
 
-def asint(obj, default=0):
+
+def asint(obj: int, default: int = 0) -> int:
     """Make any value into an int, even if the cast fails"""
     try:
         value = int(obj)
@@ -27,21 +39,26 @@ def asint(obj, default=0):
     return value
 
 
-def clamp(value, low, high):
+def clamp(value: NumberT, low: NumberT, high: NumberT) -> NumberT:
     """Clamp a value to the specified range"""
     return min(high, max(low, value))
 
 
-def clamp_zero(value, maximum):
+def clamp_one(value: float) -> float:
+    """Clamp a value into the inclusive 0.0..1.0 range."""
+    return clamp(value, 0.0, 1.0)
+
+
+def clamp_zero(value: int, maximum: int) -> int:
     """Clamp a value between 0 and the maximum value"""
     return clamp(value, 0, maximum)
 
 
-def epoch_millis():
+def epoch_millis() -> int:
     return int(time.time() * 1000)
 
 
-def add_parents(paths):
+def add_parents(paths: set[str]) -> set[str]:
     """Iterate over each item in the set and add its parent directories."""
     all_paths = set()
     for path in paths:
@@ -56,19 +73,19 @@ def add_parents(paths):
     return all_paths
 
 
-def format_exception(exc):
+def format_exception(exc) -> tuple[TextType | None, str]:
     """Format an exception object for display"""
     exc_type, exc_value, exc_tb = sys.exc_info()
-    details = traceback.format_exception(exc_type, exc_value, exc_tb)
-    details = '\n'.join(map(core.decode, details))
+    details: str = traceback.format_exception(exc_type, exc_value, exc_tb)  # type: ignore[assignment]
+    details: str = '\n'.join(map(core.decode, details))
     if hasattr(exc, 'msg'):
-        msg = exc.msg
+        msg: TextType | None = exc.msg
     else:
-        msg = core.decode(repr(exc))
+        msg: TextType | None = core.decode(repr(exc))
     return (msg, details)
 
 
-def sublist(values, remove):
+def sublist(values: list[Any], remove: list[Any]) -> list[Any]:
     """Subtracts list b from list a and returns the resulting list."""
     # conceptually, c = a - b
     result = []
@@ -81,7 +98,7 @@ def sublist(values, remove):
 __grep_cache = {}
 
 
-def grep(pattern, items, squash=True):
+def grep(pattern, items: list[Any], squash: bool = True):
     """Greps a list for items that match a pattern
 
     :param squash: If only one item matches, return just that item
@@ -117,12 +134,12 @@ def grep(pattern, items, squash=True):
     elif squash and len(matched) == 1:
         result = matched[0]
     else:
-        result = matched
+        result: dict = matched
 
     return result
 
 
-def basename(path):
+def basename(path: str) -> str:
     """
     An os.path.basename() implementation that always uses '/'
 
@@ -133,12 +150,12 @@ def basename(path):
     return path.rsplit('/', 1)[-1]
 
 
-def strip_one(path):
+def strip_one(path: str) -> str:
     """Strip one level of directory"""
     return path.strip('/').split('/', 1)[-1]
 
 
-def dirname(path, current_dir=''):
+def dirname(path: str, current_dir: str = '') -> str:
     """
     An os.path.dirname() implementation that always uses '/'
 
@@ -154,12 +171,12 @@ def dirname(path, current_dir=''):
     return path.rsplit('/', 1)[0]
 
 
-def splitpath(path):
+def splitpath(path: str) -> list[str]:
     """Split paths using '/' regardless of platform"""
     return path.split('/')
 
 
-def split(name):
+def split(name) -> tuple[str, str]:
     """Split a path-like name. Returns tuple "(head, tail)" where "tail" is
     everything after the final slash. The "head" may be empty.
 
@@ -175,7 +192,7 @@ def split(name):
     return (dirname(name), basename(name))
 
 
-def join(*paths):
+def join(*paths) -> str:
     """Join paths using '/' regardless of platform
 
     >>> join('a', 'b', 'c')
@@ -185,7 +202,7 @@ def join(*paths):
     return '/'.join(paths)
 
 
-def normalize_slash(value):
+def normalize_slash(value: str) -> str:
     """Strip and normalize slashes in a string
 
     >>> normalize_slash('///Meow///Cat///')
@@ -200,7 +217,7 @@ def normalize_slash(value):
     return value
 
 
-def pathjoin(paths):
+def pathjoin(paths) -> str:
     """Join a list of paths using '/' regardless of platform
 
     >>> pathjoin(['a', 'b', 'c'])
@@ -210,7 +227,7 @@ def pathjoin(paths):
     return join(*paths)
 
 
-def pathset(path):
+def pathset(path: str) -> list[str]:
     """Return all of the path components for the specified path
 
     >>> pathset('foo/bar/baz') == ['foo', 'foo/bar', 'foo/bar/baz']
@@ -227,26 +244,26 @@ def pathset(path):
     return result
 
 
-def select_directory(paths):
+def select_directory(ops: operations.IOperations, paths: list[str]) -> str:
     """Return the first directory in a list of paths"""
     if not paths:
-        return core.getcwd()
+        return ops.getcwd()
 
     for path in paths:
-        if core.isdir(path):
+        if ops.isdir(path):
             return path
 
-    return os.path.dirname(paths[0]) or core.getcwd()
+    return os.path.dirname(paths[0]) or ops.getcwd()
 
 
-def strip_prefix(prefix, string):
-    """Return string, without the prefix. Blow up if string doesn't
-    start with prefix."""
-    assert string.startswith(prefix)
-    return string[len(prefix) :]
+def strip_prefix(string, prefix: str) -> str:
+    """Return string, without the prefix if present"""
+    if string.startswith(prefix):
+        return string[len(prefix) :]
+    return string
 
 
-def tablength(word, tabwidth):
+def tablength(word, tabwidth: int) -> int:
     """Return length of a word taking tabs into account
 
     >>> tablength("\\t\\t\\t\\tX", 8)
@@ -256,17 +273,17 @@ def tablength(word, tabwidth):
     return len(word.replace('\t', '')) + word.count('\t') * tabwidth
 
 
-def _shell_split_py2(value):
+def _shell_split_py2(value) -> list[core.UStr | None]:
     """Python2 requires bytes inputs to shlex.split().  Returns [unicode]"""
     try:
-        result = shlex.split(core.encode(value))
+        result = shlex.split(core.encode(value))  # type: ignore[call-overload]
     except ValueError:
         result = core.encode(value).strip().split()
     # Decode to Unicode strings
     return [core.decode(arg) for arg in result]
 
 
-def _shell_split_py3(value):
+def _shell_split_py3(value: str) -> list[Any | str]:
     """Python3 requires Unicode inputs to shlex.split().  Convert to Unicode"""
     try:
         result = shlex.split(value)
@@ -276,17 +293,12 @@ def _shell_split_py3(value):
     return result
 
 
-def shell_split(value):
-    if compat.PY2:
-        # Encode before calling split()
-        values = _shell_split_py2(value)
-    else:
-        # Python3 does not need the encode/decode dance
-        values = _shell_split_py3(value)
+def shell_split(value: str) -> list[Any | str]:
+    values = _shell_split_py3(value)
     return values
 
 
-def tmp_filename(label, suffix=''):
+def tmp_filename(label: str, suffix: str = '') -> str:
     label = 'git-cola-' + label.replace('/', '-').replace('\\', '-')
     with tempfile.NamedTemporaryFile(
         prefix=label + '-', suffix=suffix, delete=False
@@ -294,7 +306,7 @@ def tmp_filename(label, suffix=''):
         return handle.name
 
 
-def find_bash_exe():
+def find_bash_exe(ops: operations.IOperations) -> str | None:
     """
     Locate bash.exe bundled with Git for Windows.
 
@@ -308,7 +320,7 @@ def find_bash_exe():
         return None
 
     # Estimate Git root directory (e.g., C:\Program Files\Git)
-    cmd_dir = os.path.dirname(os.path.abspath(git_path))
+    cmd_dir = os.path.dirname(ops.abspath(git_path))
     git_root = os.path.dirname(cmd_dir)
 
     # Typical relative locations for bash.exe under Git for Windows
@@ -317,49 +329,29 @@ def find_bash_exe():
     # Search and return the first match
     for rel in candidates:
         bash = os.path.join(git_root, rel, 'bash.exe')
-        if os.path.exists(bash):
+        if ops.exists(bash):
             return bash.replace('\\', '/')
 
     return None
 
 
-def is_linux():
-    """Is this a Linux machine?"""
-    return sys.platform.startswith('linux')
-
-
-def is_debian():
-    """Is this a Debian/Linux machine?"""
-    return os.path.exists('/usr/bin/apt-get')
-
-
-def is_darwin():
-    """Is this a macOS machine?"""
-    return sys.platform == 'darwin'
-
-
-def is_win32():
-    """Return True on win32"""
-    return sys.platform in {'win32', 'cygwin'}
-
-
-def launch_default_app(paths):
+def launch_default_app(context: ApplicationContext, paths) -> None:
     """Execute the default application on the specified paths"""
-    if is_win32():
+    if core.IS_WIN32:
         for path in paths:
             if hasattr(os, 'startfile'):
-                os.startfile(os.path.abspath(path))
+                os.startfile(context.ops.abspath(path))
         return
 
-    if is_darwin():
+    if core.IS_DARWIN:
         launcher = 'open'
     else:
         launcher = 'xdg-open'
 
-    core.fork([launcher] + paths)
+    core.fork([launcher] + paths, ops=context.ops)
 
 
-def expandpath(path):
+def expandpath(path: str) -> str:
     """Expand ~user/ and environment $variables"""
     path = os.path.expandvars(path)
     if path.startswith('~'):
@@ -367,7 +359,7 @@ def expandpath(path):
     return path
 
 
-def get_hostname_from_url(url_str):
+def get_hostname_from_url(url_str: str) -> str | None:
     """Extract the hostname component from a URL
 
     >>> get_hostname_from_url('user@example.org:namespace/project')
@@ -403,7 +395,7 @@ def get_hostname_from_url(url_str):
     return hostname
 
 
-def get_path_from_url(url_str):
+def get_path_from_url(url_str: str) -> str | None:
     """Extract the path component from a URL
 
     >>> get_path_from_url('user@example.org:namespace/project')
@@ -434,8 +426,7 @@ def get_path_from_url(url_str):
         path = url.path
 
     path = path.strip('/')  # Strip leading and trailing slashes.
-    if path.endswith('.git'):
-        path = path[: -len('.git')]
+    path = path.removesuffix('.git')
 
     return path
 
@@ -443,13 +434,13 @@ def get_path_from_url(url_str):
 class Group:
     """Operate on a collection of objects as a single unit"""
 
-    def __init__(self, *members):
+    def __init__(self, *members) -> None:
         self._members = members
 
-    def __getattr__(self, name):
+    def __getattr__(self, name: str) -> Callable:
         """Return a function that relays calls to the group"""
 
-        def relay(*args, **kwargs):
+        def relay(*args, **kwargs) -> None:
             for member in self._members:
                 method = getattr(member, name)
                 method(*args, **kwargs)
@@ -458,7 +449,7 @@ class Group:
         return relay
 
 
-def strip_prefixes_and_suffixes(values, prefix, suffix):
+def strip_prefixes_and_suffixes(values: dict[str, str], prefix, suffix) -> list[str]:
     """Strip prefixes and suffixes from a sequence of values
 
     Values are assumed to begin and end with the specified prefix and suffix.
@@ -470,7 +461,9 @@ def strip_prefixes_and_suffixes(values, prefix, suffix):
     return sorted(name[prefix_len:-suffix_len] for name in values)
 
 
-def strip_prefixes_and_suffixes_from_keys(values, prefix, suffix):
+def strip_prefixes_and_suffixes_from_keys(
+    values: dict[str, str], prefix: str, suffix: str
+) -> dict[str, str]:
     """Transform dictionary keys to remove prefixes and suffixes
 
     Values are assumed to begin and end with the specified prefix and suffix.
@@ -482,7 +475,7 @@ def strip_prefixes_and_suffixes_from_keys(values, prefix, suffix):
     return {key[prefix_len:-suffix_len]: value for (key, value) in values.items()}
 
 
-def strip_prefixes_from_keys(values, prefix):
+def strip_prefixes_from_keys(values: dict[str, str], prefix: str) -> dict[str, str]:
     """Transform dictionary keys to remove prefixes
 
     Values are assumed to begin with the specified prefix.
@@ -493,16 +486,16 @@ def strip_prefixes_from_keys(values, prefix):
 class Proxy:
     """Wrap an object and override attributes"""
 
-    def __init__(self, obj, **overrides):
+    def __init__(self, obj: QAction, **overrides) -> None:
         self._obj = obj
         for k, v in overrides.items():
             setattr(self, k, v)
 
-    def __getattr__(self, name):
+    def __getattr__(self, name: str) -> Any:
         return getattr(self._obj, name)
 
 
-def slice_func(input_items, map_func):
+def slice_func(input_items: list[str], map_func: Callable) -> tuple[int, str, str]:
     """Slice input_items and call `map_func` over every slice
 
     This exists because of "errno: Argument list too long"
@@ -554,21 +547,23 @@ def slice_func(input_items, map_func):
 
 
 class Sequence:
-    def __init__(self, sequence):
+    def __init__(self, sequence) -> None:
         self.sequence = sequence
 
-    def index(self, item, default=-1):
+    def index(self, item, default=-1) -> int:
         try:
             idx = self.sequence.index(item)
         except ValueError:
             idx = default
         return idx
 
-    def __getitem__(self, idx):
+    def __getitem__(self, idx: int) -> Any:
         return self.sequence[idx]
 
 
-def catch_runtime_error(func, *args, **kwargs):
+def catch_runtime_error(
+    func: Callable, *args, **kwargs
+) -> tuple[bool, None] | tuple[bool, bool]:
     """Run the function safely.
 
     Catch RuntimeError to avoid tracebacks during application shutdown.
@@ -586,7 +581,7 @@ def catch_runtime_error(func, *args, **kwargs):
     return (valid, result)
 
 
-def sha256hex(value):
+def sha256hex(value) -> str:
     """Return a hexdigest of the SHA-256 hash of the specified value"""
     hash = hashlib.new('sha256')
     hash.update(value.encode('utf-8', 'replace'))

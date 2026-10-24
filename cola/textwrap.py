@@ -1,7 +1,6 @@
 """Text wrapping and filling"""
 import re
-
-from .compat import ustr
+from typing import Any
 
 # Copyright (C) 1999-2001 Gregory P. Ward.
 # Copyright (C) 2002, 2003 Python Software Foundation.
@@ -50,8 +49,12 @@ class TextWrapper:
     wordsep_simple_re = re.compile(r'(\s+)')
 
     def __init__(
-        self, width=70, tabwidth=8, break_on_hyphens=False, drop_whitespace=True
-    ):
+        self,
+        width: int = 70,
+        tabwidth: int = 8,
+        break_on_hyphens: bool = False,
+        drop_whitespace: bool = True,
+    ) -> None:
         self.width = width
         self.tabwidth = tabwidth
         self.break_on_hyphens = break_on_hyphens
@@ -60,10 +63,12 @@ class TextWrapper:
         # recompile the regexes for Unicode mode -- done in this clumsy way for
         # backwards compatibility because it's rather common to monkey-patch
         # the TextWrapper class' wordsep_re attribute.
-        self.wordsep_re_uni = re.compile(self.wordsep_re.pattern, re.U)
-        self.wordsep_simple_re_uni = re.compile(self.wordsep_simple_re.pattern, re.U)
+        self.wordsep_re_uni = re.compile(self.wordsep_re.pattern, re.UNICODE)
+        self.wordsep_simple_re_uni = re.compile(
+            self.wordsep_simple_re.pattern, re.UNICODE
+        )
 
-    def _split(self, text):
+    def _split(self, text: str) -> list[Any]:
         """_split(text : string) -> [string]
 
         Split the text to wrap into indivisible chunks.  Chunks are
@@ -78,7 +83,7 @@ class TextWrapper:
           'use', ' ', 'the', ' ', '-b', ' ', option!'
         otherwise.
         """
-        if isinstance(text, ustr):
+        if isinstance(text, str):
             if self.break_on_hyphens:
                 pat = self.wordsep_re_uni
             else:
@@ -92,7 +97,7 @@ class TextWrapper:
         chunks = list(filter(None, chunks))  # remove empty chunks
         return chunks
 
-    def _wrap_chunks(self, chunks):
+    def _wrap_chunks(self, chunks: list[Any]) -> list[Any]:
         """_wrap_chunks(chunks : [string]) -> [string]
 
         Wrap a sequence of text chunks and return a list of lines of length
@@ -163,7 +168,7 @@ class TextWrapper:
 
         return lines
 
-    def chunklen(self, word):
+    def chunklen(self, word: str) -> int:
         """Return length of a word taking tabs into account
 
         >>> w = TextWrapper(tabwidth=8)
@@ -175,7 +180,7 @@ class TextWrapper:
 
     # -- Public interface ----------------------------------------------
 
-    def wrap(self, text):
+    def wrap(self, text: str) -> list[Any]:
         """wrap(text : string) -> [string]
 
         Reformat the single paragraph in 'text' so it fits in lines of
@@ -187,7 +192,7 @@ class TextWrapper:
         chunks = self._split(text)
         return self._wrap_chunks(chunks)
 
-    def fill(self, text):
+    def fill(self, text: str) -> str:
         """fill(text : string) -> string
 
         Reformat the single paragraph in 'text' to fit in lines of no
@@ -197,7 +202,9 @@ class TextWrapper:
         return '\n'.join(self.wrap(text))
 
 
-def word_wrap(text, tabwidth, limit, break_on_hyphens=False):
+def word_wrap(
+    text: str, tabwidth: int, limit: int, break_on_hyphens: bool = False
+) -> str:
     """Wrap long lines to the specified limit"""
 
     lines = []
@@ -264,5 +271,5 @@ def word_wrap(text, tabwidth, limit, break_on_hyphens=False):
     return '\n'.join(lines)
 
 
-def is_blank(string):
+def is_blank(string: str):
     return string and not string.strip(' ')

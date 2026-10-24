@@ -1,7 +1,7 @@
 from qtpy import QtGui
 from qtpy import QtWidgets
-from qtpy.QtCore import Signal
 from qtpy.QtCore import Qt
+from qtpy.QtCore import Signal
 
 from .. import cmds
 from .. import hotkeys
@@ -55,7 +55,7 @@ class FileWidget(TreeWidget):
                 for r in map(str, range(10))
             )
         else:
-            self.toggle_remark_actions = tuple()
+            self.toggle_remark_actions = ()
 
         self.itemSelectionChanged.connect(self.selection_changed)
 

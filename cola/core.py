@@ -3,6 +3,7 @@
 The @interruptable functions retry when system calls are interrupted,
 e.g. when python raises an IOError or OSError with errno == EINTR.
 """
+from __future__ import annotations
 import ctypes
 import functools
 import itertools
@@ -11,12 +12,18 @@ import os
 import platform
 import subprocess
 import sys
+from collections.abc import Callable
+from typing import TYPE_CHECKING
+from typing import Any
 
 from .decorators import interruptable
-from .compat import ustr
-from .compat import PY2
-from .compat import PY3
-from .compat import WIN32
+
+if TYPE_CHECKING:
+    from io import BufferedReader
+    from io import BufferedWriter
+    from io import TextIOWrapper
+
+    from . import operations
 
 # /usr/include/stdlib.h
 # #define EXIT_SUCCESS    0   /* Successful exit status.  */
@@ -35,6 +42,13 @@ EXIT_UNAVAILABLE = 69
 # Default encoding
 ENCODING = 'utf-8'
 
+# The max 32-bit signed integer range for Qt is (-2147483648 to 2147483647)
+INT32_MAX = (2**31) - 1
+
+IS_LINUX = sys.platform.startswith('linux')
+IS_DARWIN = sys.platform == 'darwin'
+IS_WIN32 = sys.platform in {'win32', 'cygwin'}
+
 # Some files are not in UTF-8; some other aren't in any codification.
 # Remember that GIT doesn't care about encodings (saves binary data)
 _encoding_tests = [
@@ -46,7 +60,7 @@ _encoding_tests = [
 ]
 
 
-class UStr(ustr):
+class UStr(str):
     """Unicode string wrapper that remembers its encoding
 
     UStr wraps Unicode strings to provide the `encoding` attribute.
@@ -58,18 +72,18 @@ class UStr(ustr):
 
     """
 
-    def __new__(cls, string, encoding):
+    def __new__(cls, string: str | UStr, encoding: str) -> UStr:
         if isinstance(string, UStr):
             if encoding != string.encoding:
                 raise ValueError(f'Encoding conflict: {string.encoding} vs. {encoding}')
-            string = ustr(string)
+            string = str(string)
 
-        obj = ustr.__new__(cls, string)
+        obj = str.__new__(cls, string)
         obj.encoding = encoding
         return obj
 
 
-def decode_maybe(value, encoding, errors='strict'):
+def decode_maybe(value, encoding, errors: str = 'strict') -> Any:
     """Decode a value when the "decode" method exists"""
     if hasattr(value, 'decode'):
         result = value.decode(encoding, errors=errors)
@@ -78,20 +92,26 @@ def decode_maybe(value, encoding, errors='strict'):
     return result
 
 
-def decode(value, encoding=None, errors='strict'):
+def decode(
+    value: bytes | str | UStr | None,
+    encoding: str | None = None,
+    errors: str = 'strict',
+) -> UStr | None:
     """decode(encoded_string) returns an un-encoded Unicode string"""
     if value is None:
         result = None
-    elif isinstance(value, ustr):
-        result = UStr(value, ENCODING)
+    elif isinstance(value, str):
+        result: bytes | UStr | None = UStr(value, ENCODING)
     elif encoding == 'bytes':
-        result = value
+        result: bytes | UStr | None = value
     else:
         result = None
         if encoding is None:
-            encoding_tests = _encoding_tests
+            encoding_tests: itertools.chain | list[str] = _encoding_tests
         else:
-            encoding_tests = itertools.chain([encoding], _encoding_tests)
+            encoding_tests: itertools.chain | list[str] = itertools.chain(
+                [encoding], _encoding_tests
+            )
 
         for enc in encoding_tests:
             try:
@@ -108,37 +128,41 @@ def decode(value, encoding=None, errors='strict'):
     return result
 
 
-def encode(string, encoding=None):
+def encode(string: str | UStr, encoding: str | None = None) -> bytes:
     """encode(string) returns a byte string encoded to UTF-8"""
-    if not isinstance(string, ustr):
+    if not isinstance(string, str):
         return string
     return string.encode(encoding or ENCODING, 'replace')
 
 
-def mkpath(path, encoding=None):
+def mkpath(path: str | UStr, encoding: str | None = None) -> bytes | UStr:
     # The Windows API requires Unicode strings regardless of python version
-    if WIN32:
+    if IS_WIN32:
         return decode(path, encoding=encoding)
     # UNIX prefers bytes
     return encode(path, encoding=encoding)
 
 
-def decode_seq(seq, encoding=None):
+def decode_seq(seq: list[bytes], encoding: None = None) -> list[UStr]:
     """Decode a sequence of values"""
     return [decode(x, encoding=encoding) for x in seq]
 
 
-def list2cmdline(cmd):
+def list2cmdline(cmd: list[str | Any | UStr]) -> str:
     return subprocess.list2cmdline([decode(c) for c in cmd])
 
 
-def read(filename, size=-1, encoding=None, errors='strict'):
+def read(
+    filename: str, size: int = -1, encoding: str | None = None, errors: str = 'strict'
+) -> UStr:
     """Read filename and return contents"""
     with xopen(filename, 'rb') as fh:
         return xread(fh, size=size, encoding=encoding, errors=errors)
 
 
-def write(path, contents, encoding=None, append=False):
+def write(
+    path: str, contents: str, encoding: str | None = None, append: bool = False
+) -> int:
     """Writes a Unicode string to a file"""
     if append:
         mode = 'ab'
@@ -149,40 +173,42 @@ def write(path, contents, encoding=None, append=False):
 
 
 @interruptable
-def xread(fh, size=-1, encoding=None, errors='strict'):
+def xread(
+    fh: BufferedReader, size: int = -1, encoding: None = None, errors: str = 'strict'
+) -> UStr:
     """Read from a file handle and retry when interrupted"""
     return decode(fh.read(size), encoding=encoding, errors=errors)
 
 
 @interruptable
-def xwrite(fh, content, encoding=None):
+def xwrite(fh: BufferedWriter, content: str, encoding: None = None) -> int:
     """Write to a file handle and retry when interrupted"""
     return fh.write(encode(content, encoding=encoding))
 
 
 @interruptable
-def wait(proc):
+def wait(proc) -> Any:
     """Wait on a subprocess and retry when interrupted"""
     return proc.wait()
 
 
 @interruptable
-def readline(fh, encoding=None):
+def readline(fh, encoding=None) -> UStr | None:
     return decode(fh.readline(), encoding=encoding)
 
 
 @interruptable
 def start_command(
-    cmd,
-    cwd=None,
-    add_env=None,
-    universal_newlines=False,
-    stdin=subprocess.PIPE,
-    stdout=subprocess.PIPE,
-    no_win32_startupinfo=False,
-    stderr=subprocess.PIPE,
+    cmd: list[UStr | str],
+    cwd: UStr | None = None,
+    add_env: dict[str, str] | None = None,
+    universal_newlines: bool = False,
+    stdin: int | None = subprocess.PIPE,
+    stdout: int | None = subprocess.PIPE,
+    no_win32_startupinfo: bool = False,
+    stderr: int | None = subprocess.PIPE,
     **extra,
-):
+) -> subprocess.Popen:
     """Start the given command, and return a subprocess object.
 
     This provides a simpler interface to the subprocess module.
@@ -201,9 +227,9 @@ def start_command(
     # strings to subprocess.  Python will automatically encode into the
     # default encoding (UTF-8) when it gets Unicode strings.
     shell = extra.get('shell', False)
-    cmd = prep_for_subprocess(cmd, shell=shell)
+    cmd: list[UStr | str] = prep_for_subprocess(cmd, shell=shell)
 
-    if WIN32 and cwd == getcwd():
+    if IS_WIN32 and cwd == getcwd():
         # Windows cannot deal with passing a cwd that contains Unicode
         # but we luckily can pass None when the supplied cwd is the same
         # as our current directory and get the same effect.
@@ -211,10 +237,7 @@ def start_command(
         # the subprocess.
         cwd = None
 
-    if PY2 and cwd:
-        cwd = encode(cwd)
-
-    if WIN32:
+    if IS_WIN32:
         # If git-cola is invoked on Windows using "start pythonw git-cola",
         # a console window will briefly flash on the screen each time
         # git-cola invokes git, which is very annoying.  The code below
@@ -223,7 +246,7 @@ def start_command(
         startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
         extra['startupinfo'] = startupinfo
 
-        if WIN32 and not no_win32_startupinfo:
+        if IS_WIN32 and not no_win32_startupinfo:
             CREATE_NO_WINDOW = 0x08000000
             extra['creationflags'] = CREATE_NO_WINDOW
 
@@ -243,28 +266,24 @@ def start_command(
     )
 
 
-def prep_for_subprocess(cmd, shell=False):
+def prep_for_subprocess(cmd: list[UStr | str], shell: bool = False) -> list[UStr | str]:
     """Decode on Python3, encode on Python2"""
     # See the comment in start_command()
     if shell:
-        if PY3:
-            cmd = decode(cmd)
-        else:
-            cmd = encode(cmd)
+        cmd = decode(cmd)  # type: ignore[assignment, arg-type]
     else:
-        if PY3:
-            cmd = [decode(c) for c in cmd]
-        else:
-            cmd = [encode(c) for c in cmd]
+        cmd = [decode(c) for c in cmd]  # type: ignore[assignment, arg-type]
     return cmd
 
 
 @interruptable
-def communicate(proc):
-    return proc.communicate()
+def communicate(
+    proc: subprocess.Popen, input: bytes | None
+) -> tuple[None, bytes] | tuple[bytes, bytes]:
+    return proc.communicate(input)
 
 
-def run_command(cmd, *args, **kwargs):
+def run_command(cmd: list[UStr | str], *args, **kwargs) -> tuple[int, UStr, UStr]:
     """Run the given command to completion, and return its results.
 
     This provides a simpler interface to the subprocess module.
@@ -273,11 +292,12 @@ def run_command(cmd, *args, **kwargs):
 
     """
     encoding = kwargs.pop('encoding', None)
+    input = kwargs.pop('input', None)
     try:
         process = start_command(cmd, *args, **kwargs)
     except FileNotFoundError as err:
         return (EXIT_UNAVAILABLE, UStr('', ENCODING), UStr(f'{err}', ENCODING))
-    (output, errors) = communicate(process)
+    (output, errors) = communicate(process, input)
     output = decode(output, encoding=encoding)
     errors = decode(errors, encoding=encoding)
     exit_code = process.returncode
@@ -285,13 +305,23 @@ def run_command(cmd, *args, **kwargs):
 
 
 @interruptable
-def _fork_posix(args, cwd=None, shell=False):
+def _fork_posix(
+    args: list[str],
+    cwd: str | None = None,
+    shell: bool = False,
+    ops: operations.IOperations | None = None,
+) -> int:
     """Launch a process in the background."""
     encoded_args = [encode(arg) for arg in args]
     return subprocess.Popen(encoded_args, cwd=cwd, shell=shell).pid
 
 
-def _fork_win32(args, cwd=None, shell=False):
+def _fork_win32(
+    args,
+    cwd: str | None = None,
+    shell: bool = False,
+    ops: operations.IOperations = None,
+) -> int:
     """Launch a background process using crazy win32 voodoo."""
     # This is probably wrong, but it works.  Windows.. Wow.
     if args[0] == 'git-dag':
@@ -299,13 +329,10 @@ def _fork_win32(args, cwd=None, shell=False):
         args = [sys.executable] + args
 
     if not shell:
-        args[0] = _win32_find_exe(args[0])
+        args[0] = _win32_find_exe(args[0], ops)
 
-    if PY3:
-        # see comment in start_command()
-        argv = [decode(arg) for arg in args]
-    else:
-        argv = [encode(arg) for arg in args]
+    # see comment in start_command()
+    argv = [decode(arg) for arg in args]
 
     DETACHED_PROCESS = 0x00000008  # Amazing!
     return subprocess.Popen(
@@ -313,7 +340,7 @@ def _fork_win32(args, cwd=None, shell=False):
     ).pid
 
 
-def _win32_find_exe(exe):
+def _win32_find_exe(exe: Any, ops: operations.IOperations) -> Any:
     """Find the actual file for a Windows executable.
 
     This function goes through the same process that the Windows shell uses to
@@ -329,7 +356,7 @@ def _win32_find_exe(exe):
     # if argument does not have an extension, also try it with each of the
     # extensions specified in PATHEXT
     if '.' not in exe:
-        extensions = getenv('PATHEXT', '').split(os.pathsep)
+        extensions = ops.getenv('PATHEXT', '').split(os.pathsep)
         candidates.extend([(exe + ext) for ext in extensions if ext.startswith('.')])
     # search the current directory first
     for candidate in candidates:
@@ -338,7 +365,7 @@ def _win32_find_exe(exe):
     # if the argument does not include a path separator, search each of the
     # directories on the PATH
     if not os.path.dirname(exe):
-        for path in getenv('PATH').split(os.pathsep):
+        for path in ops.getenv('PATH').split(os.pathsep):
             if path:
                 for candidate in candidates:
                     full_path = os.path.join(path, candidate)
@@ -349,17 +376,19 @@ def _win32_find_exe(exe):
 
 
 # Portability wrappers
-if sys.platform in {'win32', 'cygwin'}:
+if IS_WIN32:
     fork = _fork_win32
 else:
     fork = _fork_posix
 
 
-def _decorator_noop(x):
+def _decorator_noop(x: bool | os.stat_result | None) -> bool | os.stat_result | None:
     return x
 
 
-def wrap(action, func, decorator=None):
+def wrap(
+    action: Callable, func: Callable, decorator: Callable | None = None
+) -> Callable:
     """Wrap arguments with `action`, optionally decorate the result"""
     if decorator is None:
         decorator = _decorator_noop
@@ -371,7 +400,7 @@ def wrap(action, func, decorator=None):
     return wrapped
 
 
-def decorate(decorator, func):
+def decorate(decorator, func) -> functools._Wrapped[..., Any, ..., Any]:
     """Decorate the result of `func` with `action`"""
 
     @functools.wraps(func)
@@ -381,23 +410,23 @@ def decorate(decorator, func):
     return decorated
 
 
-def getenv(name, default=None):
+def getenv(name: str, default: str | None = None) -> UStr | None:
     return decode(os.getenv(name, default))
 
 
-def guess_mimetype(filename):
+def guess_mimetype(filename: str) -> str | None:
     """Robustly guess a filename's mimetype"""
     mimetype = None
     try:
         mimetype = mimetypes.guess_type(filename)[0]
     except UnicodeEncodeError:
-        mimetype = mimetypes.guess_type(encode(filename))[0]
+        mimetype = mimetypes.guess_type(encode(filename))[0]  # type: ignore[arg-type]
     except (TypeError, ValueError):
         mimetype = mimetypes.guess_type(decode(filename))[0]
     return mimetype
 
 
-def xopen(path, mode='r', encoding=None):
+def xopen(path: str, mode: str = 'r', encoding: str | None = None) -> Any:
     """Open a file with the specified mode and encoding
 
     The path is decoded into Unicode on Windows and encoded into bytes on Unix.
@@ -405,42 +434,53 @@ def xopen(path, mode='r', encoding=None):
     return open(mkpath(path, encoding=encoding), mode)
 
 
-def open_append(path, encoding=None):
+def open_append(path, encoding: str | None = None) -> TextIOWrapper:
     """Open a file for appending in UTF-8 text mode"""
     return open(mkpath(path, encoding=encoding), 'a', encoding='utf-8')
 
 
-def open_read(path, encoding=None):
+def open_read(path: str, encoding: str | None = None) -> TextIOWrapper:
     """Open a file for reading in UTF-8 text mode"""
     return open(mkpath(path, encoding=encoding), encoding='utf-8')
 
 
-def open_write(path, encoding=None):
+def open_write(path: str, encoding: str | None = None) -> TextIOWrapper:
     """Open a file for writing in UTF-8 text mode"""
     return open(mkpath(path, encoding=encoding), 'w', encoding='utf-8')
 
 
-def print_stdout(msg, linesep='\n'):
+def print_stdout(msg, linesep: str = '\n') -> None:
     msg = msg + linesep
-    if PY2:
-        msg = encode(msg, encoding=ENCODING)
     sys.stdout.write(msg)
 
 
-def print_stderr(msg, linesep='\n'):
+def print_stderr(msg, linesep: str = '\n') -> None:
     msg = msg + linesep
-    if PY2:
-        msg = encode(msg, encoding=ENCODING)
     sys.stderr.write(msg)
 
 
-def error(msg, status=EXIT_FAILURE, linesep='\n'):
+def error(msg, status=EXIT_FAILURE, linesep: str = '\n') -> None:
     print_stderr(msg, linesep=linesep)
     sys.exit(status)
 
 
+def setenv(ops: operations.IOperations, key: str, value: str) -> None:
+    """Compatibility wrapper for setting environment variables
+
+    Windows requires putenv(). Unix only requires os.environ.
+    """
+    ops.environ_setvalue(key, value)
+    ops.putenv(key, value)
+
+
+def unsetenv(ops: operations.IOperations, key: str) -> None:
+    """Compatibility wrapper for clearing environment variables"""
+    ops.environ_pop(key, None)
+    ops.unsetenv(key)
+
+
 @interruptable
-def node():
+def node() -> str:
     return platform.node()
 
 
@@ -448,18 +488,12 @@ abspath = wrap(mkpath, os.path.abspath, decorator=decode)
 chdir = wrap(mkpath, os.chdir)
 exists = wrap(mkpath, os.path.exists)
 expanduser = wrap(encode, os.path.expanduser, decorator=decode)
-if PY2:
-    if hasattr(os, 'getcwdu'):
-        getcwd = os.getcwdu
-    else:
-        getcwd = decorate(decode, os.getcwd)
-else:
-    getcwd = os.getcwd
+getcwd = os.getcwd
 
 
 # NOTE: find_executable() is originally from the stdlib, but starting with
 # python3.7 the stdlib no longer bundles distutils.
-def _find_executable(executable, path=None):
+def _find_executable(executable: str, path: str | None = None) -> str | None:
     """Tries to find 'executable' in the directories listed in 'path'.
 
     A string listing directories separated by 'os.pathsep'; defaults to
@@ -471,13 +505,13 @@ def _find_executable(executable, path=None):
     paths = path.split(os.pathsep)
     _, ext = os.path.splitext(executable)
 
-    if (sys.platform == 'win32') and (ext != '.exe'):
+    if IS_WIN32 and ext != '.exe':
         executable = executable + '.exe'
 
-    if not os.path.isfile(executable):
+    if not isfile(executable):
         for dirname in paths:
             filename = os.path.join(dirname, executable)
-            if os.path.isfile(filename):
+            if isfile(filename):
                 # the file exists, we have a shot at spawn working
                 return filename
         return None
@@ -485,7 +519,7 @@ def _find_executable(executable, path=None):
     return executable
 
 
-def _fdatasync(fd):
+def _fdatasync(fd: int) -> None:
     """fdatasync the file descriptor. Returns True on success"""
     try:
         os.fdatasync(fd)
@@ -493,7 +527,7 @@ def _fdatasync(fd):
         pass
 
 
-def _fsync(fd):
+def _fsync(fd) -> None:
     """fsync the file descriptor. Returns True on success"""
     try:
         os.fsync(fd)
@@ -501,7 +535,7 @@ def _fsync(fd):
         pass
 
 
-def fsync(fd):
+def fsync(fd: int) -> None:
     """Flush contents to disk using fdatasync() / fsync()"""
     has_libc_fdatasync = False
     has_libc_fsync = False
@@ -512,8 +546,8 @@ def fsync(fd):
             libc = ctypes.CDLL('libc.so.6')
         except OSError:
             libc = None
-        has_libc_fdatasync = libc and hasattr(libc, 'fdatasync')
-        has_libc_fsync = libc and hasattr(libc, 'fsync')
+        has_libc_fdatasync: bool | None = libc and hasattr(libc, 'fdatasync')
+        has_libc_fsync: bool | None = libc and hasattr(libc, 'fsync')
     if has_os_fdatasync:
         _fdatasync(fd)
     elif has_os_fsync:
@@ -524,15 +558,12 @@ def fsync(fd):
         libc.fsync(fd)
 
 
-def rename(old, new):
+def rename(old: str, new: str) -> None:
     """Rename a path. Transform arguments to handle non-ASCII file paths"""
     os.rename(mkpath(old), mkpath(new))
 
 
-if PY2:
-    find_executable = wrap(mkpath, _find_executable, decorator=decode)
-else:
-    find_executable = wrap(decode, _find_executable, decorator=decode)
+find_executable = wrap(decode, _find_executable, decorator=decode)
 isdir = wrap(mkpath, os.path.isdir)
 isfile = wrap(mkpath, os.path.isfile)
 islink = wrap(mkpath, os.path.islink)
@@ -552,7 +583,4 @@ relpath = wrap(mkpath, os.path.relpath, decorator=decode)
 remove = wrap(mkpath, os.remove)
 stat = wrap(mkpath, os.stat)
 unlink = wrap(mkpath, os.unlink)
-if PY2:
-    walk = wrap(mkpath, os.walk)
-else:
-    walk = os.walk
+walk = os.walk

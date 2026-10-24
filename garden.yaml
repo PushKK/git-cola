@@ -77,6 +77,8 @@ trees:
         ${activate}
         cercis --version
         cercis "$@" bin bin/git-* cola test extras/sphinxtogithub
+        isort --version
+        isort --force-single-line-imports --py=39 --no-lines-before=STDLIB "$@" bin bin/git-* cola test extras/sphinxtogithub
       html: garden html ${GARDEN_CMD_VERBOSE} docs
       install: |
         ${activate}
@@ -166,16 +168,20 @@ trees:
     remotes:
       abid1998: "${gh-https}/abid1998/git-cola.git"
       achernet: "${gh-https}/achernet/git-cola.git"
-      Ahrirg: "${gh-https}/Ahrirg/git-cola.git"
+      afradox: "${gh-https}/AFRADOX/git-cola.git"
+      ahrirg: "${gh-https}/Ahrirg/git-cola.git"
+      akhilsayshi: "${gh-https}/akhilsayshi/git-cola.git"
+      andreasvonvogt: "${gh-https}/andreasvonvogt/git-cola.git"
       arnaudh: "${gh-https}/arnaudh/git-cola.git"
       axel-h: "${gh-https}/axel-h/git-cola.git"
-      BaumiCoder: "${gh-https}/BaumiCoder/git-cola.git"
+      baumicoder: "${gh-https}/BaumiCoder/git-cola.git"
       bearsh: "${gh-https}/bearsh/git-cola.git"
       bensmrs: "${gh-https}/bensmrs/git-cola.git"
       bobvanderlinden: "${gh-https}/bobvanderlinden/git-cola.git"
       brccabral: "${gh-https}/brccabral/git-cola.git"
       brlin-tw: "${gh-https}/brlin-tw/git-cola.git"
-      DasaniT: "${gh-https}/DasaniT/git-cola.git"
+      dasanit: "${gh-https}/DasaniT/git-cola.git"
+      dani-devlop: "${gh-https}/Dani-Devlop/git-cola.git"
       davvid: "${gh-ssh}:davvid/git-cola.git"
       dschwoerer: "${gh-https}/dschwoerer/git-cola.git"
       florisla: "${gh-https}/florisla/git-cola.git"
@@ -188,46 +194,55 @@ trees:
       harmathy: "${gh-https}/harmathy/git-cola.git"
       hsoft: "${gh-https}/hsoft/git-cola.git"
       jamie-pate: "${gh-https}/jamie-pate/git-cola.git"
-      jm4R: "${gh-https}/jm4R/git-cola.git"
+      jm4r: "${gh-https}/jm4R/git-cola.git"
+      joshuataylor: "${gh-https}/joshuataylor/git-cola.git"
+      karunyamuddana: "${gh-https}/Karunya-Muddana/git-cola.git"
       kenyuy: "${gh-https}/kenyuy/git-cola.git"
       kisaragi-hiu: "${gh-https}/kisaragi-hiu/git-cola.git"
       kneirinck: "${gh-https}/kneirinck/git-cola.git"
+      kopach: "${gh-https}/kopach/git-cola.git"
       kt-devoss: "${gh-https}/kt-devoss/_oss_contrib_git-cola.git"
+      kurellajunior: "${gh-https}/kurellajunior/git-cola.git"
       kurtmckee: "${gh-https}/kurtmckee/git-cola.git"
       laerreal: "${gh-https}/laerreal/git-cola.git"
       lah7: "${gh-https}/lah7/git-cola.git"
+      land784: "${gh-https}/Land784/git-cola.git"
       lefairy: "${gh-https}/lefairy/git-cola.git"
+      legasik21: "${gh-https}/legasik21/git-cola_GFI.git"
       living180: "${gh-https}/living180/git-cola.git"
       ljhcage: "${gh-https}/ljhcage/git-cola.git"
-      Mailaender: "${gh-https}/Mailaender/git-cola.git"
+      mailaender: "${gh-https}/Mailaender/git-cola.git"
       malpas: "${gh-https}/malpas/git-cola.git"
       melkecelioglu: "${gh-https}/melkecelioglu/git-cola.git"
       milestone12: "${gh-https}/milestone12/git-cola.git"
-      Mithil467: "${gh-https}/Mithil467/git-cola.git"
+      mithil467: "${gh-https}/Mithil467/git-cola.git"
       mmargoliono: "${gh-https}/mmargoliono/git-cola"
       mp-chet: "${gh-https}/mp-chet/git-cola.git"
       nandalopes: "${gh-https}/nandalopes/git-cola.git"
-      NielBuys: "${gh-https}/NielBuys/git-cola.git"
-      Nizhal: "${gh-https}/Nizhal/git-cola.git"
-      OriShalhon: "${gh-https}/OriShalhon/git-cola.git"
+      nielbuys: "${gh-https}/NielBuys/git-cola.git"
+      nizhal: "${gh-https}/Nizhal/git-cola.git"
+      orihhalhon: "${gh-https}/OriShalhon/git-cola.git"
       p12tic: "${gh-https}/p12tic/git-cola.git"
       pilarmolinalopez: "${gh-https}/pilarmolinalopez/git-cola.git"
-      PushKK: "${gh-https}/PushKK/git-cola.git"
+      pushkk: "${gh-https}/PushKK/git-cola.git"
       quintusfelix: "${gh-https}/quintusfelix/git-cola.git"
+      raidos23: "${gh-https}/raidos23/git-cola.git"
       rafaelreuber: "${gh-https}/rafaelreuber/git-cola.git"
       scop: "${gh-https}/scop/git-cola.git"
+      senique: "${gh-https}/senique/git-cola.git"
       sergei-dyshel: "${gh-https}/sergei-dyshel/git-cola.git"
       skunkwerks: "${gh-https}/skunkwerks/git-cola.git"
       sthalik: "${gh-https}/sthalik/git-cola.git"
+      suchismitab0511: "${gh-https}/suchismitab0511/git-cola.git"
       takluyver: "${gh-https}/takluyver/git-cola.git"
       thk123: "${gh-https}/thk123/git-cola.git"
       timgates42: "${gh-https}/timgates42/git-cola.git"
       vdragon: "${gh-https}/Vdragon/git-cola.git"
       victorhck: "${gh-https}/victorhck/git-cola.git"
       virtualstaticvoid: "${gh-https}/virtualstaticvoid/git-cola.git"
-      VishnuSanal: "${gh-https}/VishnuSanal/git-cola.git"
+      vishnusanal: "${gh-https}/VishnuSanal/git-cola.git"
       wm4: "${gh-https}/wm4/git-cola.git"
-      WNguyen14: "${gh-https}/WNguyen14/git-cola.git"
+      wnguyen14: "${gh-https}/WNguyen14/git-cola.git"
       wojnilowicz: "${gh-https}/wojnilowicz/git-cola.git"
       yaellevy: "${gh-https}/yaellevy/git-cola.git"
       yakushabb: "${gh-https}/yakushabb/git-cola.git"
@@ -289,10 +304,15 @@ trees:
     variables:
       app-id: com.github.git_cola.git-cola
     commands:
-      build: flatpak-builder "$@" --user "${prefix}" "${app-id}.yml"
+      build/full: flatpak-builder "$@" --ccache --user "${prefix}" "${app-id}.yml"
+      build: |
+        flatpak-builder --skip-if-unchanged --keep-build-dirs --build-only --ccache \
+            --user "${prefix}" "${app-id}.yml"
       check: |
-        flatpak run --command=flatpak-builder-lint \
-            org.flatpak.Builder "$@" --exceptions builddir "${prefix}"
+        flatpak run --command=flatpak-builder-lint org.flatpak.Builder \
+            --exceptions --exceptions-repo stable manifest "${app-id}.yml" "$@"
+        flatpak run --command=flatpak-builder-lint org.flatpak.Builder \
+            --exceptions --exceptions-repo stable builddir "${prefix}" "$@"
       install: flatpak-builder "$@" --install --user "${prefix}" "${app-id}.yml"
       run: flatpak run ${app-id}
       setup: |
@@ -300,14 +320,15 @@ trees:
         flathub https://flathub.org/repo/flathub.flatpakrepo
         flatpak install --user \
         org.flatpak.Builder/x86_64 \
-        org.kde.Sdk/x86_64/6.9 \
-        org.kde.Platform/x86_64/6.9 \
-        com.riverbankcomputing.PyQt.BaseApp/x86_64/6.9
+        org.freedesktop.Sdk.Extension.rust-stable/x86_64/25.08 \
+        org.kde.Sdk/x86_64/6.11 \
+        org.kde.Platform/x86_64/6.11 \
+        com.riverbankcomputing.PyQt.BaseApp/x86_64/6.11
     url: "${gh-https}/flathub/com.github.git_cola.git-cola.git"
     remotes:
-      Erick555: "${gh-https}/Erick555/com.github.git_cola.git-cola.git"
-      Mailaender: "${gh-https}/Mailaender/com.github.git_cola.git-cola.git"
-      PunkPangolin: "${gh-https}/PunkPangolin/com.github.git_cola.git-cola.git"
+      erick555: "${gh-https}/Erick555/com.github.git_cola.git-cola.git"
+      mailaender: "${gh-https}/Mailaender/com.github.git_cola.git-cola.git"
+      punkpangolin: "${gh-https}/PunkPangolin/com.github.git_cola.git-cola.git"
     gitconfig:
       remote.origin.pushurl:
         - "${gh-ssh}:flathub/com.github.git_cola.git-cola.git"
@@ -385,7 +406,7 @@ variables:
   mandir: ${prefix}/share/man/man1
   metainfodir: ${datadir}/metainfo
   cola-app: ${TREE_PATH}/git-cola.app
-  cola-app-resources: ${cola_app}/Contents/Resources
+  cola-app-resources: ${cola-app}/Contents/Resources
   is-virtualenv: |
     $ ${PYTHON} -c '
     import os, sys

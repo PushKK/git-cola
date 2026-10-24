@@ -1,6 +1,6 @@
 """Text widgets"""
-from functools import partial
 import math
+from functools import partial
 
 from qtpy import QtCore
 from qtpy import QtGui
@@ -8,13 +8,13 @@ from qtpy import QtWidgets
 from qtpy.QtCore import Qt
 from qtpy.QtCore import Signal
 
-from ..models import prefs
-from ..qtutils import get
 from .. import hotkeys
 from .. import icons
 from .. import qtutils
 from .. import utils
 from ..i18n import N_
+from ..models import prefs
+from ..qtutils import get
 from . import defs
 
 
@@ -664,7 +664,6 @@ class HintWidget(QtCore.QObject):
         self._is_error = False
         self._error_seen = False
         self._default_style = ''
-        widget.setPlaceholderText(hint)
         error_bg_color = QtGui.QColor(Qt.red).darker()
         error_fg_color = QtGui.QColor(Qt.white)
         error_bg_rgb = qtutils.rgb_css(error_bg_color)
@@ -674,15 +673,16 @@ class HintWidget(QtCore.QObject):
             'error_fg_rgb': error_fg_rgb,
             'error_bg_rgb': error_bg_rgb,
         }
-        self._error_style = (
-            """
-            %(name)s {
-                color: %(error_fg_rgb)s;
-                background-color: %(error_bg_rgb)s;
-            }
-        """
-            % env
+        self._error_style = """
+            {name} {{
+                color: {error_fg_rgb};
+                background-color: {error_bg_rgb};
+            }}
+        """.format(
+            **env
         )
+        # Set the placeholder text.
+        self.set_value(hint)
 
     def widget(self):
         """Return the parent text widget"""
@@ -1002,9 +1002,7 @@ def text_dialog(context, text, title):
     widget.setWindowModality(Qt.WindowModal)
     widget.setWindowTitle(title)
 
-    scroll = QtWidgets.QScrollArea()
-    scroll.setWidget(label)
-
+    scroll = qtutils.scroll_area(label)
     layout = qtutils.hbox(defs.margin, defs.spacing, scroll)
     widget.setLayout(layout)
 
@@ -1073,7 +1071,7 @@ class LineNumbers(TextDecorator):
 
     def width_hint(self):
         document = self.editor.document()
-        digits = int(math.log(max(1, document.blockCount()), 10)) + 2
+        digits = int(math.log10(max(1, document.blockCount()))) + 2
         text_width = qtutils.text_width(self.font(), '0')
         return defs.large_margin + (text_width * digits)
 

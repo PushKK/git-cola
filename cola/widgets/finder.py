@@ -7,16 +7,15 @@ from qtpy import QtWidgets
 from qtpy.QtCore import Qt
 from qtpy.QtCore import Signal
 
-from ..i18n import N_
-from ..qtutils import get
-from ..utils import Group
 from .. import cmds
-from .. import core
 from .. import gitcmds
 from .. import hotkeys
 from .. import icons
-from .. import utils
 from .. import qtutils
+from .. import utils
+from ..i18n import N_
+from ..qtutils import get
+from ..utils import Group
 from . import completion
 from . import defs
 from . import filetree
@@ -132,13 +131,13 @@ class Finder(standard.Dialog):
         if ref is None:
             ref = 'HEAD'
         self.ref = ref
-        label = os.path.basename(core.getcwd()) + '/'
+        label = os.path.basename(self.context.ops.getcwd()) + '/'
         self.input_label = QtWidgets.QLabel(label)
         self.input_txt = completion.GitPathsFromRefLineEdit(
             context, ref, hint=N_('<path> ...')
         )
 
-        self.tree = filetree.FileTree(parent=self)
+        self.tree = filetree.FileTree(self.context, parent=self)
         self.browser = text.VimTextBrowser(context, parent=self)
         self.filename = None
 

@@ -1,6 +1,8 @@
-from functools import partial
+from __future__ import annotations
 import os
 import time
+from functools import partial
+from typing import TYPE_CHECKING
 
 from qtpy import QtCore
 from qtpy import QtGui
@@ -9,17 +11,55 @@ from qtpy.QtCore import Qt
 from qtpy.QtCore import Signal
 from qtpy.QtWidgets import QDockWidget
 
-from ..i18n import N_
-from ..interaction import Interaction
-from ..settings import Settings, mklist
-from ..models import prefs
 from .. import core
 from .. import hotkeys
 from .. import icons
 from .. import qtcompat
 from .. import qtutils
 from .. import utils
+from ..i18n import N_
+from ..interaction import Interaction
+from ..models import prefs
+from ..settings import Settings
+from ..settings import mklist
 from . import defs
+
+if TYPE_CHECKING:
+    from ..app import ApplicationContext
+
+# Magic header emitted by QWidget::saveGeometry() (Qt 5/6).
+_QWIDGET_GEOMETRY_MAGIC = b'\x01\xd9\xd0\xcb'
+# Offset of the "maximized" flag byte inside a saveGeometry() blob:
+#   4 magic + 2 major + 2 minor + 16 frame QRect + 16 normal QRect + 4 screen
+_QWIDGET_GEOMETRY_MAXIMIZED_OFFSET = 44
+
+
+def _strip_maximized_geometry_flag(blob):
+    """Return (blob_without_maximized_flag, was_maximized).
+
+    QWidget::saveGeometry() encodes the maximized state as a single byte at a
+    well-known offset. Strip it so restoreGeometry() does not re-apply the
+    maximized state during widget construction; the caller is responsible for
+    re-applying it after show() has been called.
+
+    Cf. https://doc.qt.io/qt-6/qwidget.html#saveGeometry
+    """
+    # The QByteArray returned by fromBase64 supports the bytes-like protocol,
+    # so bytes(blob) gives us a plain Python bytes object we can index into.
+    raw = bytes(blob)
+    if len(raw) <= _QWIDGET_GEOMETRY_MAXIMIZED_OFFSET or not raw.startswith(
+        _QWIDGET_GEOMETRY_MAGIC
+    ):
+        return blob, False
+    was_maximized = bool(raw[_QWIDGET_GEOMETRY_MAXIMIZED_OFFSET])
+    if not was_maximized:
+        return blob, False
+    patched = (
+        raw[:_QWIDGET_GEOMETRY_MAXIMIZED_OFFSET]
+        + b'\0'
+        + raw[_QWIDGET_GEOMETRY_MAXIMIZED_OFFSET + 1 :]
+    )
+    return QtCore.QByteArray(patched), True
 
 
 class WidgetMixin:
@@ -44,7 +84,7 @@ class WidgetMixin:
 
     def resize_to_desktop(self):
         width, height = qtutils.desktop_size()
-        if utils.is_darwin():
+        if core.IS_DARWIN:
             self.resize(width, height)
         else:
             shown = self.isVisible()
@@ -96,7 +136,31 @@ class WidgetMixin:
         geometry = state.get('geometry', '')
         if geometry:
             from_base64 = QtCore.QByteArray.fromBase64
-            result = self.restoreGeometry(from_base64(core.encode(geometry)))
+            geometry_bytes = from_base64(core.encode(geometry))
+            was_maximized = False
+            # On macOS 15, calling restoreGeometry() with a blob whose
+            # "maximized" flag is set sends Qt into a layout-feedback loop on
+            # relaunch -- the window grinds creating and destroying tab bars
+            # and dock-widget children until it eventually settles or hangs.
+            # This is the latest in a series of recurring upstream reports;
+            # the chain is QTBUG-4397 -> QTBUG-21371 -> QTBUG-106678 ->
+            # QTBUG-123335 (still open as of Qt 6.11).
+            #
+            # Strip the maximized flag from the blob and re-apply it via
+            # setWindowState() after the event loop is running, which gives
+            # Cocoa a chance to place the window before we ask for the
+            # maximized state.
+            #
+            # Cf. https://bugreports.qt.io/browse/QTBUG-123335
+            if core.IS_DARWIN:
+                geometry_bytes, was_maximized = _strip_maximized_geometry_flag(
+                    geometry_bytes
+                )
+            result = self.restoreGeometry(geometry_bytes)
+            if was_maximized:
+                QtCore.QTimer.singleShot(
+                    0, lambda: self.setWindowState(Qt.WindowMaximized)
+                )
         elif width and height:
             # Users migrating from older versions won't have 'geometry'.
             # They'll be upgraded to the new format on shutdown.
@@ -198,7 +262,7 @@ class MainWindowMixin(WidgetMixin):
                 settings = context.settings
                 settings.load()
             try:
-                cwd = core.getcwd()
+                cwd = self.context.ops.getcwd()
             except FileNotFoundError:
                 pass
             else:
@@ -859,9 +923,10 @@ class SpinBox(QtWidgets.QSpinBox):
 class DirectoryPathLineEdit(QtWidgets.QWidget):
     """A combined line edit and file browser button"""
 
-    def __init__(self, path, parent):
+    def __init__(self, context: ApplicationContext, path, parent):
         QtWidgets.QWidget.__init__(self, parent)
 
+        self.context = context
         self.line_edit = QtWidgets.QLineEdit()
         self.line_edit.setText(path)
 
@@ -893,11 +958,11 @@ class DirectoryPathLineEdit(QtWidgets.QWidget):
             return
         # Make the directory relative only if it the current directory or
         # or subdirectory from the current directory.
-        current_dir = core.getcwd()
+        current_dir = self.context.ops.getcwd()
         if output_dir == current_dir:
             output_dir = '.'
         elif output_dir.startswith(current_dir + os.sep):
-            output_dir = os.path.relpath(output_dir)
+            output_dir = self.context.ops.relpath(output_dir)
         self.set_value(output_dir)
 
 
@@ -946,6 +1011,8 @@ class MessageBox(Dialog):
         ok_text='',
         cancel_text=None,
         cancel_icon=None,
+        details_display_fn=None,
+        expand_details=True,
     ):
         Dialog.__init__(self, parent=parent)
 
@@ -975,19 +1042,33 @@ class MessageBox(Dialog):
         self.button_ok = qtutils.create_button(text=ok_text, icon=ok_icon)
 
         self.button_close = qtutils.close_button(text=cancel_text, icon=cancel_icon)
+        self.button_details = qtutils.create_button(text=N_('Show Details...'))
+        self.button_details.setCheckable(True)
 
         if ok_text:
             self.button_ok.setText(ok_text)
         else:
             self.button_ok.hide()
 
-        self.details_text = QtWidgets.QPlainTextEdit()
+        if details_display_fn:
+            self.details_text = details_display_fn(self)
+        else:
+            self.details_text = QtWidgets.QPlainTextEdit()
+            self.details_text.setFont(qtutils.default_monospace_font())
+
         self.details_text.setReadOnly(True)
         if details:
-            self.details_text.setFont(qtutils.default_monospace_font())
-            self.details_text.setPlainText(details)
+            if hasattr(self.details_text, 'set_diff'):
+                self.details_text.set_diff(details)
+            elif hasattr(self.details_text, 'set_value'):
+                self.details_text.set_value(details)
+            else:
+                self.details_text.setPlainText(details)
+            if not expand_details:
+                self.details_text.hide()
         else:
             self.details_text.hide()
+            self.button_details.hide()
 
         self.info_layout = qtutils.vbox(
             defs.large_margin,
@@ -1008,6 +1089,7 @@ class MessageBox(Dialog):
         self.buttons_layout = qtutils.hbox(
             defs.no_margin,
             defs.button_spacing,
+            self.button_details,
             qtutils.STRETCH,
             self.button_close,
             self.button_ok,
@@ -1017,8 +1099,8 @@ class MessageBox(Dialog):
             defs.margin,
             defs.button_spacing,
             self.top_layout,
-            self.buttons_layout,
             self.details_text,
+            self.buttons_layout,
         )
         self.main_layout.setStretchFactor(self.details_text, 2)
         self.setLayout(self.main_layout)
@@ -1032,6 +1114,7 @@ class MessageBox(Dialog):
 
         qtutils.connect_button(self.button_ok, self.accept)
         qtutils.connect_button(self.button_close, self.reject)
+        self.button_details.toggled.connect(self.details_text.setVisible)
         self.init_state(None, self.set_initial_size)
 
     def set_initial_size(self):
@@ -1046,14 +1129,13 @@ class MessageBox(Dialog):
             QtCore.QTimer.singleShot(0, self.accept)
         elif key in (Qt.Key_N, Qt.Key_Q):
             QtCore.QTimer.singleShot(0, self.reject)
-        elif key == Qt.Key_Tab:
-            if self.button_ok.isVisible():
-                event.accept()
-                if self.focusWidget() == self.button_close:
-                    self.button_ok.setFocus()
-                else:
-                    self.button_close.setFocus()
-                return
+        elif key == Qt.Key_Tab and self.button_ok.isVisible():
+            event.accept()
+            if self.focusWidget() == self.button_close:
+                self.button_ok.setFocus()
+            else:
+                self.button_close.setFocus()
+            return
         Dialog.keyPressEvent(self, event)
 
     def run(self):
@@ -1096,6 +1178,8 @@ def confirm(
     default=True,
     cancel_text=None,
     cancel_icon=None,
+    details=None,
+    details_display_fn=None,
 ):
     """Confirm that an action should take place"""
     cancel_text = cancel_text or N_('Cancel')
@@ -1112,6 +1196,9 @@ def confirm(
         cancel_icon=cancel_icon,
         logo=logo,
         default=default,
+        details=details,
+        details_display_fn=details_display_fn,
+        expand_details=False,
     )
 
     return mbox.run() == mbox.Accepted
@@ -1139,7 +1226,9 @@ def command_error(title, cmd, status, out, err):
     critical(title, message=message, details=details)
 
 
-def information(title, message=None, details=None, informative_text=None):
+def information(
+    title, message=None, details=None, details_display_fn=None, informative_text=None
+):
     """Show information with the provided title and message."""
     if message is None:
         message = title
@@ -1149,6 +1238,7 @@ def information(title, message=None, details=None, informative_text=None):
         text=message,
         info=informative_text,
         details=details,
+        details_display_fn=details_display_fn,
         logo=icons.cola(),
     )
     mbox.run()

@@ -7,12 +7,12 @@ from qtpy import QtWidgets
 from qtpy.QtCore import Qt
 from qtpy.QtCore import Signal
 
-from ..models import prefs
 from .. import core
 from .. import gitcmds
 from .. import icons
 from .. import qtutils
 from .. import utils
+from ..models import prefs
 from . import defs
 from .text import HintedLineEdit
 
@@ -58,7 +58,7 @@ class BranchValidator(QtGui.QValidator):
                 # The intermediate string, when deleting characters, might
                 # end in a name that is invalid to Git, but we must allow it
                 # otherwise we won't be able to delete it using backspace.
-                if string.endswith('/') or string.endswith('.'):
+                if string.endswith(('/', '.')):
                     state = self.Intermediate
                 else:
                     state = self.Invalid
@@ -374,17 +374,17 @@ class HighlightDelegate(QtWidgets.QStyledItemDelegate):
         text = index.data()
         if self.case_sensitive:
             html = text.replace(
-                self.highlight_text, '<strong>%s</strong>' % self.highlight_text
+                self.highlight_text, f'<strong>{self.highlight_text}</strong>'
             )
         else:
             match = re.match(
-                r'(.*)(%s)(.*)' % re.escape(self.highlight_text), text, re.IGNORECASE
+                rf'(.*)({re.escape(self.highlight_text)})(.*)', text, re.IGNORECASE
             )
             if match:
                 start = match.group(1) or ''
                 middle = match.group(2) or ''
                 end = match.group(3) or ''
-                html = start + ('<strong>%s</strong>' % middle) + end
+                html = start + (f'<strong>{middle}</strong>') + end
             else:
                 html = text
         self.doc.setHtml(html)

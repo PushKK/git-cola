@@ -1,23 +1,25 @@
 """Provides widgets related to branches"""
+from enum import Enum
 from functools import partial
 
+from qtpy import QtCore
 from qtpy import QtWidgets
 from qtpy.QtCore import Qt
 from qtpy.QtCore import Signal
 
-from ..git import STDOUT
-from ..i18n import N_
-from ..interaction import Interaction
-from ..models import main as main_mod
-from ..widgets import completion
-from ..widgets import defs
-from ..widgets import standard
-from ..qtutils import get
 from .. import cmds
 from .. import gitcmds
 from .. import hotkeys
 from .. import icons
 from .. import qtutils
+from ..git import STDOUT
+from ..i18n import N_
+from ..interaction import Interaction
+from ..models import main as main_mod
+from ..qtutils import get
+from ..widgets import completion
+from ..widgets import defs
+from ..widgets import standard
 from . import log
 from . import text
 
@@ -161,6 +163,30 @@ class BranchesTreeWidget(standard.TreeWidget):
         # Checkout branch when double clicked
         self.doubleClicked.connect(self.checkout_action)
 
+    def event(self, event):
+        """Display tag and remote details in a tooltip"""
+        if event.type() == QtCore.QEvent.ToolTip:
+            pos = event.pos()
+            item = self.itemAt(pos)
+            if item and item.item_type == ItemType.REMOTE:
+                remote = item.name
+                status, details, _ = self.context.git.remote('show', '-n', remote)
+                if status == 0:
+                    QtWidgets.QToolTip.showText(event.globalPos(), details, self)
+            elif item and item.item_type == ItemType.REF_NAME:
+                ref_name = item.refname
+                status, details, _ = self.context.git.show(
+                    ref_name, decorate=True, no_patch=True
+                )
+                if status == 0:
+                    QtWidgets.QToolTip.showText(event.globalPos(), details, self)
+            else:
+                QtWidgets.QToolTip.hideText()
+
+            return True
+
+        return super().event(event)
+
     def set_name_filter(self, value):
         """Update the name filter and rebuild the tree to include only matching refs"""
         self._name_filter = value
@@ -184,17 +210,34 @@ class BranchesTreeWidget(standard.TreeWidget):
 
         local_tree = create_tree_entries(model.local_branches, self._name_filter)
         local_tree.basename = N_('Local')
-        local = create_toplevel_item(local_tree, icon=icons.branch(), ellipsis=ellipsis)
+        local = create_toplevel_item(
+            local_tree,
+            ItemType.PLACEHOLDER,
+            leaf_type=ItemType.REF_NAME,
+            icon=icons.branch(),
+            ellipsis=ellipsis,
+        )
 
         remote_tree = create_tree_entries(model.remote_branches, self._name_filter)
         remote_tree.basename = N_('Remote')
         remote = create_toplevel_item(
-            remote_tree, icon=icons.branch(), ellipsis=ellipsis
+            remote_tree,
+            ItemType.REMOTE,
+            child_type=ItemType.PLACEHOLDER,
+            leaf_type=ItemType.REF_NAME,
+            icon=icons.branch(),
+            ellipsis=ellipsis,
         )
 
         tags_tree = create_tree_entries(model.tags, self._name_filter)
         tags_tree.basename = N_('Tags')
-        tags = create_toplevel_item(tags_tree, icon=icons.tag(), ellipsis=ellipsis)
+        tags = create_toplevel_item(
+            tags_tree,
+            ItemType.PLACEHOLDER,
+            leaf_type=ItemType.REF_NAME,
+            icon=icons.tag(),
+            ellipsis=ellipsis,
+        )
 
         self.clear()
         self.addTopLevelItems([local, remote, tags])
@@ -555,13 +598,19 @@ class BranchDetailsTask(qtutils.Task):
         return self.current_branch, tracked_branch, ahead, behind
 
 
+class ItemType(Enum):
+    PLACEHOLDER = 0
+    REMOTE = 1
+    REF_NAME = 2
+
+
 class BranchTreeWidgetItem(QtWidgets.QTreeWidgetItem):
-    def __init__(self, name, refname=None, icon=None):
+    def __init__(self, name, item_type, refname=None, icon=None):
         QtWidgets.QTreeWidgetItem.__init__(self)
         self.name = name
         self.refname = refname
+        self.item_type = item_type
         self.setText(0, name)
-        self.setToolTip(0, name)
         if icon is not None:
             self.setIcon(0, icon)
         self.setFlags(Qt.ItemIsEnabled | Qt.ItemIsSelectable)
@@ -663,22 +712,55 @@ def create_name_dict(names):
     return tree_names
 
 
-def create_toplevel_item(tree, icon=None, ellipsis=None):
+def create_toplevel_item(
+    tree, item_type, child_type=None, leaf_type=None, icon=None, ellipsis=None
+):
     """Create a top-level BranchTreeWidgetItem and its children"""
-
-    item = BranchTreeWidgetItem(tree.basename, icon=ellipsis)
-    children = create_tree_items(tree.children, icon=icon, ellipsis=ellipsis)
+    item = BranchTreeWidgetItem(tree.basename, ItemType.PLACEHOLDER, icon=ellipsis)
+    children = create_tree_items(
+        tree.children,
+        item_type,
+        child_type=child_type,
+        leaf_type=leaf_type,
+        icon=icon,
+        ellipsis=ellipsis,
+    )
     if children:
         item.addChildren(children)
     return item
 
 
-def create_tree_items(entries, icon=None, ellipsis=None):
+def create_tree_items(
+    entries,
+    item_type,
+    child_type=None,
+    leaf_type=None,
+    icon=None,
+    ellipsis=None,
+):
     """Create children items for a tree item"""
     result = []
+
+    if child_type is None:
+        child_type = item_type
+    if leaf_type is None:
+        leaf_type = child_type
+
     for tree in entries:
-        item = BranchTreeWidgetItem(tree.basename, refname=tree.refname, icon=icon)
-        children = create_tree_items(tree.children, icon=icon, ellipsis=ellipsis)
+        children = create_tree_items(
+            tree.children,
+            child_type,
+            leaf_type=leaf_type,
+            icon=icon,
+            ellipsis=ellipsis,
+        )
+        if tree.children:
+            current_type = item_type
+        else:
+            current_type = leaf_type
+        item = BranchTreeWidgetItem(
+            tree.basename, current_type, refname=tree.refname, icon=icon
+        )
         if children:
             item.addChildren(children)
             if ellipsis is not None:

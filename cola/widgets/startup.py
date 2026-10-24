@@ -1,14 +1,11 @@
 """The startup dialog is presented when no repositories can be found at startup"""
 
-from qtpy.QtCore import Qt
 from qtpy import QtCore
 from qtpy import QtGui
 from qtpy import QtWidgets
+from qtpy.QtCore import Qt
 
-from ..i18n import N_
-from ..models import prefs
 from .. import cmds
-from .. import core
 from .. import display
 from .. import guicmds
 from .. import hotkeys
@@ -16,10 +13,11 @@ from .. import icons
 from .. import qtutils
 from .. import utils
 from .. import version
+from ..i18n import N_
+from ..models import prefs
 from . import clone
 from . import defs
 from . import standard
-
 
 ICON_MODE = 0
 LIST_MODE = 1
@@ -52,6 +50,9 @@ class StartupDialog(standard.Dialog):
         )
         self.clone_button = qtutils.create_button(
             text=N_('Clone...'), icon=icons.cola()
+        )
+        self.remove_button = qtutils.create_button(
+            text=N_('Remove'), icon=icons.remove(), enabled=False
         )
         self.close_button = qtutils.close_button()
 
@@ -114,6 +115,7 @@ class StartupDialog(standard.Dialog):
             self.open_button,
             self.clone_button,
             self.new_button,
+            self.remove_button,
             qtutils.STRETCH,
             self.close_button,
         )
@@ -130,6 +132,9 @@ class StartupDialog(standard.Dialog):
         qtutils.connect_button(self.close_button, self.reject)
         self.tab_bar.currentChanged.connect(self.tab_changed)
 
+        qtutils.connect_button(self.remove_button, self.remove_selected)
+        self.bookmarks.selectionModel().selectionChanged.connect(self.selection_changed)
+
         self.init_state(settings, self.resize_widget)
         self.setFocusProxy(self.bookmarks)
         self.bookmarks.setFocus()
@@ -139,6 +144,10 @@ class StartupDialog(standard.Dialog):
         self.list_mode = list_mode
         if list_mode == 'list':
             self.tab_bar.setCurrentIndex(1)
+
+    def selection_changed(self, items):
+        is_selected = any(index.row() > 0 for index in items.indexes())
+        self.remove_button.setEnabled(is_selected)
 
     def tab_changed(self, idx):
         bookmarks = self.bookmarks
@@ -171,6 +180,7 @@ class StartupDialog(standard.Dialog):
                 item = builder.get(item.path, item.name, view_mode, item.is_bookmark)
                 new_items.append(item)
 
+        self.remove_button.setEnabled(False)
         self.set_model(new_items)
 
         if list_mode != self.list_mode:
@@ -206,7 +216,7 @@ class StartupDialog(standard.Dialog):
         self.repodir = self.get_selected_bookmark()
         if not self.repodir:
             self.repodir = qtutils.opendir_dialog(
-                N_('Open Git Repository'), core.getcwd()
+                N_('Open Git Repository'), self.context.ops.getcwd()
             )
         if self.repodir:
             self.accept()
@@ -242,7 +252,7 @@ class StartupDialog(standard.Dialog):
             self.repodir = self.bookmarks_model.data(index, Qt.UserRole)
             if not self.repodir:
                 return
-            if not core.exists(self.repodir):
+            if not self.context.ops.exists(self.repodir):
                 self.handle_broken_repo(index)
                 return
             self.accept()
@@ -270,6 +280,9 @@ class StartupDialog(standard.Dialog):
         if selected and selected[0].row() != 0:
             return self.bookmarks_model.data(selected[0], Qt.UserRole)
         return None
+
+    def remove_selected(self):
+        self.bookmarks.remove_selected()
 
     def set_model(self, items):
         bookmarks_model = self.bookmarks_model
@@ -318,6 +331,7 @@ class BookmarksListView(QtWidgets.QListView):
 
         self.setModel(model)
         self.setSelectionMode(QtWidgets.QAbstractItemView.SingleSelection)
+        self.setTextElideMode(prefs.text_elide_mode(context))
         self.setViewMode(QtWidgets.QListView.IconMode)
         self.setResizeMode(QtWidgets.QListView.Adjust)
         self.setGridSize(make_size(defs.large_icon))
@@ -364,7 +378,9 @@ class BookmarksListView(QtWidgets.QListView):
 
         self.copy_action = qtutils.add_action(self, N_('Copy'), self.copy, hotkeys.COPY)
 
-        self.delete_action = qtutils.add_action(self, N_('Delete'), self.delete_item)
+        self.remove_action = qtutils.add_action(
+            self, N_('Remove'), self.remove_selected
+        )
 
         self.remove_missing_action = qtutils.add_action(
             self, N_('Prune Missing Entries'), self.remove_missing
@@ -383,7 +399,7 @@ class BookmarksListView(QtWidgets.QListView):
             self.launch_terminal_action,
             self.open_default_action,
             self.rename_repo_action,
-            self.delete_action,
+            self.remove_action,
         )
         self.action_group.setEnabled(True)
         self.set_default_repo_action.setEnabled(True)
@@ -441,7 +457,7 @@ class BookmarksListView(QtWidgets.QListView):
                 menu.addAction(self.set_default_repo_action)
             menu.addAction(self.rename_repo_action)
             menu.addSeparator()
-            menu.addAction(self.delete_action)
+            menu.addAction(self.remove_action)
             menu.addAction(self.remove_missing_action)
             menu.exec_(self.mapToGlobal(event.pos()))
 
@@ -519,7 +535,7 @@ class BookmarksListView(QtWidgets.QListView):
         context = self.context
         self.apply_func(lambda item: cmds.do(cmds.LaunchTerminal, context, item.path))
 
-    def delete_item(self):
+    def remove_selected(self):
         """Remove the selected repo item
 
         If the item comes from bookmarks (item.is_bookmark) then delete the item

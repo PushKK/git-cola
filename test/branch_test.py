@@ -1,8 +1,7 @@
 """Tests related to the branches widget"""
+from unittest.mock import Mock
 
 from cola.widgets import branch
-
-from .helper import Mock
 
 
 def test_create_tree_entries():
@@ -171,7 +170,7 @@ def test_create_toplevel_item():
     ]
     tree = branch.create_tree_entries(names, '')
     tree.basename = 'top'
-    top = branch.create_toplevel_item(tree)
+    top = branch.create_toplevel_item(tree, branch.ItemType.REF_NAME)
 
     expect = 'top'
     actual = top.name
@@ -311,6 +310,6 @@ def _create_top_item():
 
 
 def _create_item(name, refname, expanded):
-    item = branch.BranchTreeWidgetItem(name, refname=refname)
+    item = branch.BranchTreeWidgetItem(name, branch.ItemType.REF_NAME, refname=refname)
     item.isExpanded = Mock(return_value=expanded)
     return item

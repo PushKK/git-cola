@@ -1,3 +1,4 @@
+from __future__ import annotations
 import os
 
 from qtpy import QtCore
@@ -10,8 +11,8 @@ from .. import icons
 from .. import qtutils
 from ..i18n import N_
 from ..interaction import Interaction
-from . import defs
 from . import completion
+from . import defs
 from . import standard
 from .text import LineEdit
 

@@ -1,12 +1,13 @@
 """Tests DAG functionality"""
+from unittest.mock import patch
+
 import pytest
 
 from cola.models import dag
+from cola.widgets.dag import _prepare_labels
 
 from .helper import app_context
 from .helper import commit_files
-from .helper import patch
-
 
 # Prevent unused imports lint errors.
 assert app_context is not None
@@ -20,7 +21,7 @@ e3f5a2d0248de6197d6e0e63c901810b8a9af2f8^Afa5ad6c38be603e2ffd1f9b722a3a5c675f63d
 fa5ad6c38be603e2ffd1f9b722a3a5c675f63de2^A1ba04ad185cf9f04c56c8482e9a73ef1bd35c695^A^ADavid Aguilar^AFri Nov 30 05:19:05 2007 -0800^Adavvid@gmail.com^AAvoid multiple signoffs
 1ba04ad185cf9f04c56c8482e9a73ef1bd35c695^Aad454b189fe5785af397fd6067cf103268b6626e^A^ADavid Aguilar^AFri Nov 30 05:07:47 2007 -0800^Adavvid@gmail.com^Aupdated model/view/controller api
 ad454b189fe5785af397fd6067cf103268b6626e^A^A (tag: refs/tags/v0.0)^ADavid Aguilar^AFri Nov 30 00:03:28 2007 -0800^Adavvid@gmail.com^Afirst cut of ugit
-""".strip().replace(  # noqa
+""".strip().replace(
     '^A', chr(0x01)
 )
 LOG_LINES = LOG_TEXT.split('\n')
@@ -101,3 +102,103 @@ def test_repo_reader_contract(core, dag_context):
 
     assert 'log.abbrevCommit=false' in call_args[0][0]
     assert 'log.showSignature=false' in call_args[0][0]
+
+
+def test_prepare_labels_single_remote_no_condensing():
+    refs = ['remotes/origin/main']
+    assert _prepare_labels(refs) == [
+        ('remotes/origin/main', 'origin/main', None),
+    ]
+
+
+def test_prepare_labels_two_remotes_same_branch():
+    refs = ['remotes/origin/main', 'remotes/myremote/main']
+    assert _prepare_labels(refs) == [
+        ('remotes/myremote/main', 'myremote/main', 'myremote/\u2026'),
+        ('remotes/origin/main', 'origin/main', None),
+    ]
+
+
+def test_prepare_labels_three_remotes_same_branch():
+    refs = ['remotes/origin/main', 'remotes/open/main', 'remotes/myremote/main']
+    assert _prepare_labels(refs) == [
+        ('remotes/myremote/main', 'myremote/main', 'myremote/\u2026'),
+        ('remotes/open/main', 'open/main', 'open/\u2026'),
+        ('remotes/origin/main', 'origin/main', None),
+    ]
+
+
+def test_prepare_labels_mixed_refs():
+    refs = [
+        'HEAD',
+        'remotes/origin/main',
+        'remotes/myremote/main',
+        'heads/main',
+        'tags/v1.0',
+    ]
+    assert _prepare_labels(refs) == [
+        ('tags/v1.0', 'v1.0', None),
+        ('remotes/myremote/main', 'myremote/main', 'myremote/\u2026'),
+        ('remotes/origin/main', 'origin/main', 'origin/\u2026'),
+        ('heads/main', 'main', None),
+    ]
+
+
+def test_prepare_labels_single_remote_with_local():
+    refs = ['remotes/origin/main', 'heads/main']
+    assert _prepare_labels(refs) == [
+        ('remotes/origin/main', 'origin/main', 'origin/\u2026'),
+        ('heads/main', 'main', None),
+    ]
+
+
+def test_prepare_labels_different_branch_names_no_condensing():
+    refs = ['remotes/origin/main', 'remotes/origin/develop']
+    assert _prepare_labels(refs) == [
+        ('remotes/origin/develop', 'origin/develop', None),
+        ('remotes/origin/main', 'origin/main', None),
+    ]
+
+
+def test_prepare_labels_multiple_groups():
+    refs = [
+        'remotes/origin/main',
+        'remotes/myremote/main',
+        'remotes/origin/feat',
+        'remotes/myremote/feat',
+    ]
+    assert _prepare_labels(refs) == [
+        ('remotes/myremote/feat', 'myremote/feat', 'myremote/\u2026'),
+        ('remotes/origin/feat', 'origin/feat', None),
+        ('remotes/myremote/main', 'myremote/main', 'myremote/\u2026'),
+        ('remotes/origin/main', 'origin/main', None),
+    ]
+
+
+def test_prepare_labels_empty():
+    assert _prepare_labels([]) == []
+
+
+def test_prepare_labels_no_remotes():
+    refs = ['HEAD', 'heads/main', 'tags/v1.0']
+    assert _prepare_labels(refs) == [
+        ('tags/v1.0', 'v1.0', None),
+        ('heads/main', 'main', None),
+    ]
+
+
+def test_prepare_labels_two_groups_with_locals():
+    refs = [
+        'remotes/origin/main',
+        'remotes/myremote/main',
+        'heads/main',
+        'remotes/origin/feat',
+        'heads/feat',
+    ]
+    assert _prepare_labels(refs) == [
+        ('remotes/origin/feat', 'origin/feat', 'origin/\u2026'),
+        ('heads/feat', 'feat', None),
+        ('remotes/myremote/main', 'myremote/main', 'myremote/\u2026'),
+        ('remotes/origin/main', 'origin/main', 'origin/\u2026'),
+        ('heads/main', 'main', None),
+    ]
