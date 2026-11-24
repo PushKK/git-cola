@@ -255,7 +255,7 @@ class RemoteActionDialog(standard.Dialog):
         self.no_ff_checkbox.toggled.connect(self.update_command_display)
         text = N_('Force')
         tooltip = N_(
-            'Allow non-fast-forward updates.  Using "force" can '
+            'Allow non-fast-forward updates. Using "force" can '
             'cause the remote repository to lose commits; '
             'use it with care'
         )

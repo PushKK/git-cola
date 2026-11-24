@@ -57,7 +57,7 @@ class Merge(standard.Dialog):
 
         tooltip = N_(
             'Always create a merge commit when enabled, '
-            'even when the merge is a fast-forward update'
+            'even when the merge is a fast-forward update.'
         )
         self.checkbox_noff = qtutils.checkbox(
             text=N_('No fast forward'), tooltip=tooltip, checked=False
@@ -65,8 +65,8 @@ class Merge(standard.Dialog):
         self.checkbox_noff_state = False
 
         tooltip = N_(
-            'Commit the merge if there are no conflicts.  '
-            'Uncheck to leave the merge uncommitted'
+            'Commit the merge if there are no conflicts. '
+            'Uncheck to leave the merge uncommitted.'
         )
         self.checkbox_commit = qtutils.checkbox(
             text=N_('Commit'), tooltip=tooltip, checked=True

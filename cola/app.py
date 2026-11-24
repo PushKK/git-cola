@@ -144,7 +144,7 @@ def setup_environment(app_name) -> operations.IOperations:
     #        export GIT_MERGE_AUTOEDIT
     #
     #   to disable this behavior (if you want your users to explain their
-    #   merge commits, you do not have to do anything).  Alternatively, you
+    #   merge commits, you do not have to do anything). Alternatively, you
     #   can give the "--no-edit" option to individual invocations of the
     #   "git merge" command if you know everybody who uses your script has
     #   Git v1.7.8 or newer.
@@ -431,7 +431,7 @@ def process_args(
     if not ops.isdir(repo):
         errmsg = (
             N_(
-                'fatal: "%s" is not a directory.  '
+                'fatal: "%s" is not a directory. '
                 'Please specify a correct --repo <path>.'
             )
             % repo
@@ -469,7 +469,7 @@ def application_init(
     process_args(ops, args, setup_repo=setup_repo)
 
     # Ensure that we're working in a valid git repository.
-    # If not, try to find one.  When found, chdir there.
+    # If not, try to find one. When found, chdir there.
     context = new_context(ops, args, app_name=app_name)
     enforce_single_instance(context)
 
@@ -769,7 +769,7 @@ def initialize(socket: server.SocketClient | None = None) -> str:
         prepend_path(ops, git_path)
 
     # The current directory may have been deleted while we are still
-    # in that directory.  We rectify this situation by walking up the
+    # in that directory. We rectify this situation by walking up the
     # directory tree and retrying.
     #
     # This is needed because  because Python throws exceptions in lots of
@@ -946,7 +946,7 @@ def find_git(ops: operations.IOperations) -> str | None:
 
 
 def prepend_path(ops: operations.IOperations, path) -> None:
-    """Adds git to the PATH.  This is needed on Windows."""
+    """Adds git to the PATH. This is needed on Windows."""
     path = core.decode(path)
     path_entries = core.getenv('PATH', '').split(os.pathsep)
     if path not in path_entries:
@@ -956,7 +956,7 @@ def prepend_path(ops: operations.IOperations, path) -> None:
 
 def detect_system_theme() -> str:
     """Detect the current application theme"""
-    # Use colorScheme() when available.  Fallback to QPalette probing.
+    # Use colorScheme() when available. Fallback to QPalette probing.
     app = qtutils.app()
     hints = app.styleHints()
     if hasattr(hints, 'colorScheme'):

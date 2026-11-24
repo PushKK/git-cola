@@ -291,7 +291,7 @@ class AmendMode(EditModel):
 
     def do(self) -> bool:
         """Leave/enter amend mode."""
-        # Attempt to enter amend mode.  Do not allow this when merging.
+        # Attempt to enter amend mode. Do not allow this when merging.
         if self.amending and self.model.is_merging:
             self.skip = True
             self.model.set_mode(self.old_mode)
@@ -382,7 +382,7 @@ class RevertSnapshot:
     """The state saved before a revert, used for undoing the revert
 
     The saved patches restore the previous worktree and index contents while
-    preserving unrelated concurrent edits.  The git blob object IDs are kept
+    preserving unrelated concurrent edits. The git blob object IDs are kept
     as a fallback for restoring whole files when a patch no longer applies
     cleanly, e.g. when a file was edited by another process after the revert.
 
@@ -1599,7 +1599,7 @@ class RemoveFiles(Command):
         self.remover = remover
         self.filenames = filenames
         # We could git-hash-object stuff and provide undo-ability
-        # as an option.  Heh.
+        # as an option. Heh.
 
     def do(self) -> bool:
         files = self.filenames
@@ -2536,7 +2536,7 @@ class Merge(Command):
             revision, gpg_sign=sign, no_ff=no_ff, no_commit=no_commit, squash=squash
         )
         self.model.update_status()
-        title = N_('Merge failed.  Conflict resolution is required.')
+        title = N_('Merge failed. Conflict resolution is required.')
         self.context.notifier.command.emit(title, 'git merge', status, out, err)
 
         self.result = status, out, err
@@ -3192,7 +3192,7 @@ class RevertEditsCommand(ConfirmAction):
         worktree_blobs = gitcmds.capture_worktree_blobs(context, paths)
         if self.checkout_from_head():
             # "git checkout <head> -- <paths>" resets both the worktree and
-            # the index, so save patches for both.  The worktree patch is
+            # the index, so save patches for both. The worktree patch is
             # relative to <head>, which is what the worktree holds after the
             # checkout, so that it can be applied for the undo.
             worktree_patch = gitcmds.diff_worktree_patch(
@@ -3202,7 +3202,7 @@ class RevertEditsCommand(ConfirmAction):
             index_entries = gitcmds.read_index_entries(context, paths)
         else:
             # "git checkout -- <paths>" only updates the worktree from the
-            # index.  The index is left untouched, so the worktree patch is
+            # index. The index is left untouched, so the worktree patch is
             # relative to the index.
             worktree_patch = gitcmds.diff_worktree_patch(context, None, paths)
             index_patch = ''
@@ -3658,7 +3658,7 @@ class Stage(Command):
             Interaction.command(N_('Error'), 'git add', status, out, err)
 
         # If a path doesn't exist then that means it should be removed
-        # from the index.   We use `git add -u` for that.
+        # from the index. We use `git add -u` for that.
         if remove:
             status, out, err = gitcmds.add(context, remove, u=True)
             Interaction.command(N_('Error'), 'git add -u', status, out, err)

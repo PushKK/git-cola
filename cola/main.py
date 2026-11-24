@@ -23,7 +23,7 @@ def main(argv: list[str] | None = None) -> int:
         argv = sys.argv[1:]
     # we're using argparse with subparsers, but argparse
     # does not allow us to assign a default subparser
-    # when none has been specified.  We fake it by injecting
+    # when none has been specified. We fake it by injecting
     # 'cola' into the command-line so that parse_args()
     # routes them to the 'cola' parser by default.
     help_commands = core.encode('--help-commands')
@@ -653,7 +653,7 @@ def cmd_dag(args: argparse.Namespace) -> int:
     context = app.application_init(args, app_name='Git DAG')
     # cola.main() uses parse_args(), unlike dag.main() which uses
     # parse_known_args(), thus we aren't able to automatically forward
-    # all unknown arguments.  Special-case support for "--all" since it's
+    # all unknown arguments. Special-case support for "--all" since it's
     # used by the history viewer command on Windows.
     if args.show_all:
         args.args.insert(0, '--all')

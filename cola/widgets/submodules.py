@@ -102,7 +102,7 @@ class AddSubmodule(standard.Dialog):
         self.depth_spinbox.setToolTip(
             N_(
                 'Create a shallow clone with history truncated to the '
-                'specified number of revisions.  0 performs a full clone.'
+                'specified number of revisions. 0 performs a full clone.'
             )
         )
 

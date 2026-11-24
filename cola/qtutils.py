@@ -66,7 +66,7 @@ def connect_action_bool(action: QtWidgets.QAction, func: Callable) -> None:
 def connect_button(button: QtWidgets.QAbstractButton, func: Callable) -> None:
     """Connect a button to a function"""
     # Some versions of Qt send the `bool` argument to the clicked callback,
-    # and some do not.  The lambda consumes all callback-provided arguments.
+    # and some do not. The lambda consumes all callback-provided arguments.
     button.clicked.connect(lambda *args, **kwargs: func(), type=Qt.QueuedConnection)
 
 

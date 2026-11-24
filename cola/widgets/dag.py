@@ -1764,12 +1764,12 @@ class GitDAG(standard.MainWindow):
         model = self.model
         display_status = get(self.display_status_action)
         # The DAG tries to avoid updating when the object IDs have not
-        # changed.  Without doing this the DAG constantly redraws itself
+        # changed. Without doing this the DAG constantly redraws itself
         # whenever inotify sends update events, which hurts usability.
         #
-        # To minimize redraws we leverage `git rev-parse`.  The strategy is to
+        # To minimize redraws we leverage `git rev-parse`. The strategy is to
         # use `git rev-parse` on the input line, which converts each argument
-        # into object IDs.  From there it's a simple matter of detecting when
+        # into object IDs. From there it's a simple matter of detecting when
         # the object IDs changed.
         #
         # In addition to object IDs, we also need to know when the set of
@@ -1819,7 +1819,7 @@ class GitDAG(standard.MainWindow):
             self.commits[commit_obj.oid] = commit_obj
             for tag in commit_obj.tags:
                 self.commits[tag] = commit_obj
-        # The treewidget is quick to update.  The graphview is slower when updating
+        # The treewidget is quick to update. The graphview is slower when updating
         # incrementally so it is updated just once at thread_end() once all commits have
         # been gathered.
         self.treewidget.add_commits(commits)
@@ -1855,7 +1855,7 @@ class GitDAG(standard.MainWindow):
             # The old selection exists in the new state
             self.commits_selected.emit(sort_by_generation(new_commits))
         else:
-            # The old selection is now empty.  Select the top-most commit
+            # The old selection is now empty. Select the top-most commit
             self.commits_selected.emit([commit_obj])
 
         self.graphview.set_initial_view()

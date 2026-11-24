@@ -63,7 +63,7 @@ def capture_worktree_blobs(
 ) -> list[tuple[str, str | None]]:
     """Store the worktree contents of paths as git blobs
 
-    Returns a list of (path, oid) pairs.  The oid is None for paths that do
+    Returns a list of (path, oid) pairs. The oid is None for paths that do
     not exist in the worktree.
 
     """
@@ -1316,7 +1316,7 @@ def rev_parse(context: ApplicationContext, name: str) -> str:
 def write_blob(context: ApplicationContext, oid: str, filename: str) -> str:
     """Write a blob to a temporary file and return the path
 
-    Modern versions of Git allow invoking filters.  Older versions
+    Modern versions of Git allow invoking filters. Older versions
     get the object content as-is.
 
     """

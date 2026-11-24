@@ -383,7 +383,7 @@ class CommitMessageEditor(QtWidgets.QFrame):
         """Respond to changes to the `summary` field
 
         Newlines can enter the `summary` field when pasting, which is
-        undesirable.  Break the pasted value apart into the separate
+        undesirable. Break the pasted value apart into the separate
         (summary, description) values and move the description over to the
         "extended description" field.
 
@@ -412,7 +412,7 @@ class CommitMessageEditor(QtWidgets.QFrame):
         if not Interaction.confirm(
             N_('Clear commit message?'),
             N_('The commit message will be cleared.'),
-            N_('This cannot be undone.  Clear commit message?'),
+            N_('This cannot be undone. Clear commit message?'),
             N_('Clear commit message'),
             default=True,
             icon=icons.discard(),

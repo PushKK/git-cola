@@ -26,8 +26,8 @@ if TYPE_CHECKING:
     from . import operations
 
 # /usr/include/stdlib.h
-# #define EXIT_SUCCESS    0   /* Successful exit status.  */
-# #define EXIT_FAILURE    1   /* Failing exit status.  */
+# #define EXIT_SUCCESS    0   /* Successful exit status. */
+# #define EXIT_FAILURE    1   /* Failing exit status. */
 EXIT_SUCCESS = 0
 EXIT_FAILURE = 1
 
@@ -224,7 +224,7 @@ def start_command(
     # Python3 breaks when bytes are provided.
     #
     # Additionally, the preferred usage on Python3 is to pass Unicode
-    # strings to subprocess.  Python will automatically encode into the
+    # strings to subprocess. Python will automatically encode into the
     # default encoding (UTF-8) when it gets Unicode strings.
     shell = extra.get('shell', False)
     cmd: list[UStr | str] = prep_for_subprocess(cmd, shell=shell)
@@ -240,7 +240,7 @@ def start_command(
     if IS_WIN32:
         # If git-cola is invoked on Windows using "start pythonw git-cola",
         # a console window will briefly flash on the screen each time
-        # git-cola invokes git, which is very annoying.  The code below
+        # git-cola invokes git, which is very annoying. The code below
         # prevents this by ensuring that any window will be hidden.
         startupinfo = subprocess.STARTUPINFO()
         startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
@@ -323,7 +323,7 @@ def _fork_win32(
     ops: operations.IOperations = None,
 ) -> int:
     """Launch a background process using crazy win32 voodoo."""
-    # This is probably wrong, but it works.  Windows.. Wow.
+    # This is probably wrong, but it works. Windows.. Wow.
     if args[0] == 'git-dag':
         # win32 can't exec python scripts
         args = [sys.executable] + args
@@ -345,7 +345,7 @@ def _win32_find_exe(exe: Any, ops: operations.IOperations) -> Any:
 
     This function goes through the same process that the Windows shell uses to
     locate an executable, taking into account the PATH and PATHEXT environment
-    variables.  This allows us to avoid passing shell=True to subprocess.Popen.
+    variables. This allows us to avoid passing shell=True to subprocess.Popen.
 
     For reference, see:
     https://technet.microsoft.com/en-us/library/cc723564.aspx#XSLTsection127121120120
@@ -497,7 +497,7 @@ def _find_executable(executable: str, path: str | None = None) -> str | None:
     """Tries to find 'executable' in the directories listed in 'path'.
 
     A string listing directories separated by 'os.pathsep'; defaults to
-    os.environ['PATH'].  Returns the complete filename or None if not found.
+    os.environ['PATH']. Returns the complete filename or None if not found.
     """
     if path is None:
         path = os.environ['PATH']

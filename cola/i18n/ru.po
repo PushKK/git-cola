@@ -2171,7 +2171,7 @@ msgstr ""
 #: cola/widgets/browse.py:602
 #, python-format
 msgid "Saved \"%(filename)s\" from \"%(ref)s\" to \"%(destination)s\""
-msgstr "Сохранен \"%(filename)s\" из \"%(ref)s\" в \"%(destination)s\""
+msgstr "Сохранён \"%(filename)s\" из \"%(ref)s\" в \"%(destination)s\""
 
 #: cola/widgets/browse.py:622
 #, python-format
@@ -2579,7 +2579,7 @@ msgstr "Ветвь существует"
 #: cola/widgets/createbranch.py:263
 #, python-format
 msgid "Resetting \"%(branch)s\" to \"%(revision)s\" will lose commits."
-msgstr "Сброс \"%(branch)s\" в \"%(revision)s\" приведет к потере коммитов."
+msgstr "Сброс \"%(branch)s\" в \"%(revision)s\" приведёт к потере коммитов."
 
 #: cola/widgets/createbranch.py:278
 #, python-format
@@ -3061,27 +3061,27 @@ msgstr ""
 
 #: cola/widgets/diff.py:1937 cola/widgets/main.py:752
 msgid "Patches"
-msgstr ""
+msgstr "Заплатки (Patch)"
 
 #: cola/widgets/diff.py:1941
 msgid "Export Patch"
-msgstr ""
+msgstr "Экспорт Заплатки"
 
 #: cola/widgets/diff.py:1948
 msgid "Append Patch"
-msgstr ""
+msgstr "Применить Заплатку"
 
 #: cola/widgets/diff.py:1965
 msgid "Choose Patch..."
-msgstr ""
+msgstr "Выбрать Заплатку..."
 
 #: cola/widgets/diff.py:2017
 msgid "Append Patch..."
-msgstr ""
+msgstr "Применить Заплатку..."
 
 #: cola/widgets/diff.py:2046
 msgid "Error writing patch"
-msgstr ""
+msgstr "Ошибка при записи заплатки"
 
 #: cola/widgets/diff.py:2060
 msgid "Click to Copy"
@@ -3089,7 +3089,7 @@ msgstr ""
 
 #: cola/widgets/diff.py:2116
 msgid "Copy Name"
-msgstr ""
+msgstr "Копировать Название"
 
 #: cola/widgets/diff.py:2122
 msgid "Copy Email"
@@ -3101,7 +3101,7 @@ msgstr ""
 
 #: cola/widgets/diff.py:2466
 msgid "Apply Patches"
-msgstr "Применить патчи"
+msgstr "Применить Заплатки"
 
 #: cola/widgets/diff.py:2477
 msgid ""
@@ -3121,11 +3121,11 @@ msgstr ""
 
 #: cola/widgets/diff.py:2493
 msgid "Add patches (+)"
-msgstr "Добавить патчи (+)"
+msgstr "Добавить заплатки (+)"
 
 #: cola/widgets/diff.py:2499 cola/widgets/prefs.py:653
 msgid "Remove selected (Delete)"
-msgstr "Удалить выбранное (Delete)"
+msgstr "Удалить выбранное (Удалить)"
 
 #: cola/widgets/diff.py:2565
 #, fuzzy
@@ -3148,10 +3148,10 @@ msgid ""
 "Remotes can be renamed by selecting one from the list\n"
 "and pressing \"enter\", or by double-clicking."
 msgstr ""
-"Добавляйте и удаляйте внешние репозитории используя \n"
+"Добавить и удалить внешние репозитории, используя \n"
 "кнопки Добавить(+) и Удалить(-) на левой стороне.\n"
 "\n"
-"Можно переименовать репозиторий выбрав его из списка\n"
+"Внешний репозиторий может быть переименован, выбрав его из списка\n"
 "и нажав \"enter\", или с помощью двойного клика."
 
 #: cola/widgets/editremotes.py:66
@@ -3561,7 +3561,7 @@ msgstr ""
 
 #: cola/widgets/main.py:717
 msgid "Quick Open..."
-msgstr "Быстро открыть..."
+msgstr "Открыть быстро..."
 
 #: cola/widgets/main.py:732
 msgid "&File"
@@ -3585,11 +3585,11 @@ msgstr "Повторить"
 
 #: cola/widgets/main.py:811
 msgid "Undo Message"
-msgstr ""
+msgstr "Отменить сообщение"
 
 #: cola/widgets/main.py:820
 msgid "Redo Message"
-msgstr ""
+msgstr "Повторить сообщение"
 
 #: cola/widgets/main.py:830
 msgid "Cut"
@@ -3610,15 +3610,15 @@ msgstr "Ветвь"
 #: cola/widgets/main.py:1070
 #, python-format
 msgid "git cola version %s"
-msgstr "git cola версия %s"
+msgstr "git cola версии %s"
 
 #: cola/widgets/main.py:1074 cola/widgets/main.py:1078
 msgid "error: unable to execute git"
-msgstr ""
+msgstr "ошибка: невозможно выполнить git"
 
 #: cola/widgets/main.py:1154
 msgid "New Toolbar"
-msgstr ""
+msgstr "Новая Панель инструментов"
 
 #: cola/widgets/main.py:1181
 msgid "Layouts"
@@ -3627,12 +3627,12 @@ msgstr "Слои"
 #: cola/widgets/main.py:1301
 #, python-brace-format
 msgid "Undo \"{}\""
-msgstr ""
+msgstr "Отменить \"{}\""
 
 #: cola/widgets/main.py:1309
 #, python-brace-format
 msgid "Redo \"{}\""
-msgstr ""
+msgstr "Повторить \"{}\""
 
 #: cola/widgets/main.py:1562
 msgid ""
@@ -3670,7 +3670,7 @@ msgstr "Отмена коммита"
 
 #: cola/widgets/main.py:1603
 msgid "Diff Mode"
-msgstr ""
+msgstr "Режит Сравнения (Diff)"
 
 #: cola/widgets/main.py:1605
 msgid "Cherry-picking"
@@ -3678,7 +3678,7 @@ msgstr ""
 
 #: cola/widgets/main.py:1607
 msgid "Merging"
-msgstr "Слияние"
+msgstr "Объединение"
 
 #: cola/widgets/main.py:1609
 msgid "Rebasing"
@@ -3686,27 +3686,27 @@ msgstr "Перемещение"
 
 #: cola/widgets/main.py:1611
 msgid "Applying Patch"
-msgstr ""
+msgstr "Применить Патч"
 
 #: cola/widgets/merge.py:37 cola/widgets/merge.py:40
 msgid "Revision to Merge"
-msgstr "Версия для объединения"
+msgstr "Версия для Объединения"
 
 #: cola/widgets/merge.py:55
 msgid "Squash the merged commits into a single commit"
-msgstr "Объединить слитые коммиты в один коммит"
+msgstr "Слить объединённые коммиты в один коммит"
 
 #: cola/widgets/merge.py:59
 msgid "Always create a merge commit when enabled, even when the merge is a fast-forward update"
-msgstr "Если эта опция активна, то даже при слиянии в режиме fast-forward update будет создан отдельный (merge) коммит"
+msgstr "Всегда создавать объединённый коммит, даже если возможно объединить в режиме быстрой перемотки (fast-forward)"
 
 #: cola/widgets/merge.py:63
 msgid "No fast forward"
-msgstr ""
+msgstr "Без быстрой перемотки"
 
 #: cola/widgets/merge.py:68
 msgid "Commit the merge if there are no conflicts.  Uncheck to leave the merge uncommitted"
-msgstr "Закоммитить слияние, если нет конфликтов.  Снимите отметку, чтобы оставить слияние незакомиченным"
+msgstr "Закоммитить объединение, если нет конфликтов. Снимите отметку, чтобы оставить слияние незакомиченным"
 
 #: cola/widgets/merge.py:78
 msgid "GPG-sign the merge commit"
@@ -3969,7 +3969,7 @@ msgstr ""
 
 #: cola/widgets/prefs.py:378
 msgid "Diff Tool"
-msgstr "Программа сравнения"
+msgstr "Инструмент сравнения"
 
 #: cola/widgets/prefs.py:379
 msgid "Diff Tool Override"
@@ -3977,7 +3977,7 @@ msgstr ""
 
 #: cola/widgets/prefs.py:381
 msgid "Merge Tool"
-msgstr "Программа слияния (merge)"
+msgstr "Инструмент Объединенния (merge)"
 
 #: cola/widgets/prefs.py:382
 msgid "Merge Tool Override"
