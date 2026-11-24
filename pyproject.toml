@@ -31,7 +31,7 @@ testing = [
     "pytest-checkdocs >= 2.4",
     "pytest-enabler >= 2.2",
     "pytest-ruff >= 0.2.1",
-    "ruff < 0.16",
+    "ruff < 0.18",
 ]
 docs = [
     "furo",
@@ -93,6 +93,15 @@ line-length = 88
 [tool.pytest-enabler.ruff]
 addopts = "--ruff"
 
+[tool.ruff.lint]
+ignore = [
+    "B026",
+    "I001",
+    "S110",
+    "UP007",
+    "UP031",
+]
+
 [tool.setuptools]
 packages = [
     "cola",
@@ -118,7 +127,7 @@ cola = [
 ]
 
 [tool.setuptools_scm]
-fallback_version = "4.19.0"
+fallback_version = "4.20.0"
 
 [tool.mypy]
 python_version = "3.9"

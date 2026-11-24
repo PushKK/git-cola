@@ -63,7 +63,6 @@ from . import resources
 from . import themes
 from . import utils
 from . import version
-from .cmd import CommandBus
 from .i18n import N_
 from .interaction import Interaction
 from .models import main
@@ -371,11 +370,13 @@ class ColaQApplication(QtWidgets.QApplication):
 
     def event(self, e: QtCore.QEvent) -> bool:
         """Respond to focus events for the cola.refreshonfocus feature"""
-        if hasattr(QtCore.QEvent, 'ApplicationPaletteChange'):
-            if e.type() == QtCore.QEvent.ApplicationPaletteChange:
-                cola_app = getattr(self.context, 'app', None)
-                if cola_app:
-                    QtCore.QTimer.singleShot(0, cola_app.refresh_system_appearance)
+        if (
+            hasattr(QtCore.QEvent, 'ApplicationPaletteChange')
+            and e.type() == QtCore.QEvent.ApplicationPaletteChange
+        ):
+            cola_app = getattr(self.context, 'app', None)
+            if cola_app:
+                QtCore.QTimer.singleShot(0, cola_app.refresh_system_appearance)
         if e.type() == QtCore.QEvent.ApplicationActivate:
             context = self.context
             if context:
@@ -418,9 +419,13 @@ def process_args(
     # Initialize args.repo. If a repository was specified as a
     # positional argument then we will use that value.
     # If unspecified, the current directory is used.
-    if setup_repo and not args.repo:
-        if args.args and git.is_git_repository(ops, args.args[0]):
-            args.repo = args.args.pop(0)
+    if (
+        setup_repo
+        and not args.repo
+        and args.args
+        and git.is_git_repository(ops, args.args[0])
+    ):
+        args.repo = args.args.pop(0)
     if not args.repo:
         args.repo = ops.getcwd()
 
@@ -838,7 +843,7 @@ class ApplicationContext:
         self.args = args
         self.app: ColaApplication | None = None  # ColaApplication
         self.shared_memory = None  # QSharedMemory
-        self.command_bus: CommandBus | None = None
+        self.command_bus = cmd.CommandBus()
         self.git: git.Git | None = None
         self.cfg: gitcfg.GitConfig | None = None
         self.model: main.MainModel | None = None
@@ -855,7 +860,7 @@ class ApplicationContext:
         """Initialize view-specific members"""
         self.view = view
         self.notifier.setParent(view)
-        self.command_bus = cmd.CommandBus(parent=view)
+        self.command_bus.setParent(view)
         self.runtask = qtutils.RunTask(parent=view)
         self.notifier.command.connect(self._command, Qt.QueuedConnection)
         self.notifier.critical.connect(self._critical, Qt.QueuedConnection)

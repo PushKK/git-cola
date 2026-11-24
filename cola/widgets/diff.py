@@ -13,6 +13,7 @@ from qtpy.QtCore import Qt
 from qtpy.QtCore import Signal
 
 from .. import actions
+from .. import cmd
 from .. import cmds
 from .. import core
 from .. import diffparse
@@ -456,6 +457,7 @@ class DiffTextEdit(VimHintedPlainTextEdit):
                 config=intraline_cfg,
             )
             intraline_spans = result.spans
+        # ruff: disable[BLE001]
         except Exception:
             intraline_spans = {}
         compute_ms = (time.perf_counter() - start) * 1000
@@ -1184,8 +1186,8 @@ def render_comp_image(sources, mode, scale):
     sizes = [source_logical_size(source) for source in sources]
     logical = comp_logical_size(sources, mode)
     image = create_image(
-        max(1, int(round(logical.width() * scale))),
-        max(1, int(round(logical.height() * scale))),
+        max(1, round(logical.width() * scale)),
+        max(1, round(logical.height() * scale)),
     )
     painter = create_painter(image)
     painter.setRenderHint(QtGui.QPainter.Antialiasing, True)
@@ -1571,6 +1573,9 @@ class DiffEditor(DiffTextEdit):
         self.launch_difftool = actions.launch_difftool(context, self)
         self.stage_or_unstage = actions.stage_or_unstage(context, self)
 
+        self.undo_action = qtutils.add_undo_action(self.context, self, add_hotkey=True)
+        self.redo_action = qtutils.add_redo_action(self.context, self, add_hotkey=True)
+
         # Emit up/down signals so that they can be routed by the main widget
         self.move_up = actions.move_up(self)
         self.move_down = actions.move_down(self)
@@ -1589,6 +1594,10 @@ class DiffEditor(DiffTextEdit):
 
         # Update actions when the diff text selection changes.
         self.selectionChanged.connect(self._update_actions_for_selected_text)
+
+        self.context.command_bus.command_dispatched.connect(
+            self._update_undo_redo_actions, type=Qt.QueuedConnection
+        )
 
     def details_display_fn(self, parent):
         """Show details in a DiffTextEdit when confirming reverts"""
@@ -1615,6 +1624,11 @@ class DiffEditor(DiffTextEdit):
             elif item not in model.unstaged_deleted:
                 enabled = True
         self.action_revert_selection.setEnabled(enabled)
+
+    def _update_undo_redo_actions(self):
+        """Update the enabled state of the undo + redo actions"""
+        cmd.update_undo_action(self.context, self.undo_action)
+        cmd.update_redo_action(self.context, self.redo_action)
 
     def _update_actions_for_selected_text(self):
         """Update actions that are dependent on the selected diff text."""
@@ -1790,6 +1804,10 @@ class DiffEditor(DiffTextEdit):
         add_action(self.move_down)
         add_action(qtutils.menu_separator(menu))
 
+        add_action(self.undo_action)
+        add_action(self.redo_action)
+        add_action(qtutils.menu_separator(menu))
+
         if current_actions:
             first_action = current_actions[0]
         else:
@@ -1816,13 +1834,12 @@ class DiffEditor(DiffTextEdit):
         return True
 
     def mousePressEvent(self, event):
-        if event.button() == Qt.RightButton:
-            # Intercept right-click to move the cursor to the current position.
-            # setTextCursor() clears the selection so this is only done when
-            # nothing is selected.
-            if not self.has_selection():
-                cursor = self.cursorForPosition(event.pos())
-                self.setTextCursor(cursor)
+        # Intercept right-click to move the cursor to the current position.
+        # setTextCursor() clears the selection so this is only done when
+        # nothing is selected.
+        if event.button() == Qt.RightButton and not self.has_selection():
+            cursor = self.cursorForPosition(event.pos())
+            self.setTextCursor(cursor)
 
         return super().mousePressEvent(event)
 

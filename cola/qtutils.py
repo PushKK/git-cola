@@ -24,6 +24,7 @@ try:
 except ImportError:
     AppKit = None
 
+from . import cmd
 from . import core
 from . import hotkeys
 from . import icons
@@ -864,6 +865,44 @@ def add_close_action(widget: QtWidgets.QWidget) -> QtGui.QAction:
     return add_action(widget, N_('Close...'), widget.close, hotkeys.CLOSE, hotkeys.QUIT)
 
 
+def add_undo_action(
+    context: ApplicationContext, widget: QtWidgets.QWidget, add_hotkey: bool = False
+) -> QtGui.QAction:
+    """Create an Undo action"""
+    action = add_action_with_icon(
+        widget,
+        icons.undo(),
+        N_('Undo'),
+        lambda: cmd.undo(context),
+    )
+    action.setEnabled(False)
+    if add_hotkey:
+        action.setShortcut(hotkeys.UNDO)
+        if hasattr(Qt, 'WidgetWithChildrenShortcut'):
+            action.setShortcutContext(Qt.WidgetWithChildrenShortcut)
+        widget.addAction(action)
+    return action
+
+
+def add_redo_action(
+    context: ApplicationContext, widget: QtWidgets.QWidget, add_hotkey: bool = False
+) -> QtGui.QAction:
+    """Create a Redo action"""
+    action = add_action_with_icon(
+        widget,
+        icons.redo(),
+        N_('Redo'),
+        lambda: cmd.redo(context),
+    )
+    action.setEnabled(False)
+    if add_hotkey:
+        action.setShortcut(hotkeys.REDO)
+        if hasattr(Qt, 'WidgetWithChildrenShortcut'):
+            action.setShortcutContext(Qt.WidgetWithChildrenShortcut)
+        widget.addAction(action)
+    return action
+
+
 def app() -> QCoreApplication | None:
     """Return the current application"""
     return QtWidgets.QApplication.instance()
@@ -1444,12 +1483,9 @@ def rgb_triple(args: list[int]) -> QtGui.QColor:
     return rgb(*args)
 
 
-ColorLike: TypeAlias = Union[
-    QtGui.QColor,
-    str,
-    tuple[int, int, int],
-    tuple[int, int, int, int],
-]
+ColorLike: TypeAlias = (
+    QtGui.QColor | str | tuple[int, int, int] | tuple[int, int, int, int]
+)
 
 
 def rgba_qcolor(value: ColorLike) -> QtGui.QColor:
